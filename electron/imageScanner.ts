@@ -6,18 +6,9 @@ import { loadAppNames } from './appManifest.js'
 import { loadAppInfoEntries } from './appInfoStore.js'
 import type { AppInfoEntry } from './appInfoParser.js'
 import type { ImageAsset, ScanImagesResult, ScanImagesOptions } from '../src/shared/imageLibrary.js'
+import { SCAN_KEYWORDS } from '../src/shared/imageNameConfig.js'
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'])
-const IMAGE_NAME_KEYWORDS = [
-  'library_hero',
-  'header_schinese',
-  'header',
-  'logo_schinese',
-  'library_capsule_schinese',
-  'library_600x900_schinese',
-  'library_600x900',
-  'library_schinese',
-]
 
 export async function scanImages(
   directoryPath: string,
@@ -100,7 +91,7 @@ async function collectLibraryHeroImages(
 
     const extension = extname(entry).toLowerCase()
     const normalizedName = entry.toLowerCase()
-    if (!IMAGE_EXTENSIONS.has(extension) || !IMAGE_NAME_KEYWORDS.some((keyword) => normalizedName.includes(keyword))) {
+    if (!IMAGE_EXTENSIONS.has(extension) || !SCAN_KEYWORDS.some((keyword) => keyword === normalizedName)) {
       continue
     }
 

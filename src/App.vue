@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
-import type { ScanImagesOptions } from './shared/imageLibrary'
+import { FILE_NAME_CONFIG } from './shared/imageNameConfig'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
@@ -116,34 +116,49 @@ const collectionNames = computed(() =>
 
 const imageCountLabel = computed(() => `${filteredImages.value.length} / ${images.value.length} 张图片`)
 
-const GROUP_DISPLAY_LABELS: Record<string, string> = {
-  library_hero: '',
-  library_hero_blur: '',
-  library_hero_schinese: '',
-  library_hero_blur_schinese: '',
-  header_schinese: '',
-  header: '',
-  'logo_schinese.png': '徽标',
-  library_capsule_schinese: '封面图片',
-  'library_600x900_schinese.jpg': '竖版封面(中文)',
-  'library_600x900.jpg': '竖版封面',
-  library_schinese: '封面',
-}
-
 function groupDisplayLabel(groupName: string): string {
-  return GROUP_DISPLAY_LABELS[groupName] ?? groupName
+  return FILE_NAME_CONFIG[groupName] ?? groupName
 }
 
 const imageGroups = computed(() => {
-  const counts = new Map<string, number>()
+  // 按显示标签分组，同名标签合并为一个 Tab
+  const counts = new Map<string, { label: string; fileNames: string[] }>()
+  const seenGroups = new Set<string>()
 
   for (const image of images.value) {
-    counts.set(image.groupName, (counts.get(image.groupName) ?? 0) + 1)
+    if (seenGroups.has(image.groupName)) continue
+    seenGroups.add(image.groupName)
+    const label = groupDisplayLabel(image.groupName)
+
+    if (!counts.has(label)) {
+      counts.set(label, { label, fileNames: [] })
+    }
+    counts.get(label)!.fileNames.push(image.groupName)
   }
 
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  // 统计每个 Tab 的实际图片数量
+  const imageCounts = new Map<string, number>()
+  for (const image of images.value) {
+    const label = groupDisplayLabel(image.groupName)
+    imageCounts.set(label, (imageCounts.get(label) ?? 0) + 1)
+  }
+
+  // 构建 Tab 列表，保留输入顺序
+  const tabOrder = [
+    ...new Set(
+      [...Object.values(FILE_NAME_CONFIG), ...images.value.map((img) => groupDisplayLabel(img.groupName))].filter(
+        (v, i, a) => a.indexOf(v) === i,
+      ),
+    ),
+  ]
+
+  return tabOrder
+    .filter((label) => imageCounts.has(label))
+    .map((label) => ({
+      name: label,
+      count: imageCounts.get(label) ?? 0,
+      fileNames: counts.get(label)?.fileNames ?? [label],
+    }))
 })
 const activeGroup = ref('全部')
 const searchQuery = ref('')
@@ -171,7 +186,10 @@ const filteredImages = computed(() => {
     activeCollection.value === '全部' ? null : new Set(collections.value[activeCollection.value] ?? [])
 
   return images.value.filter((image) => {
-    const matchesGroup = activeGroup.value === '全部' || image.groupName === activeGroup.value
+    const matchesGroup =
+      activeGroup.value === '全部' ||
+      (imageGroups.value.find((g) => g.fileNames.includes(image.groupName))?.name ?? image.groupName) ===
+        activeGroup.value
     const matchesQuery =
       !query ||
       image.relativePath.toLowerCase().includes(query) ||
@@ -289,6 +307,24 @@ async function scanImages(pathToScan = directoryPath.value): Promise<void> {
     images.value = result.images
     activeGroup.value = '全部'
     clearSelection()
+
+    // 同步：清除收藏夹里已不再扫描的图片路径
+    const validPaths = new Set(result.images.map((img) => img.absolutePath))
+    let changed = false
+    const cleaned: typeof collections.value = {}
+    for (const [name, paths] of Object.entries(collections.value)) {
+      const filtered = paths.filter((p) => validPaths.has(p))
+      if (filtered.length > 0) {
+        cleaned[name] = filtered
+      }
+      if (filtered.length !== paths.length) {
+        changed = true
+      }
+    }
+    if (changed) {
+      collections.value = cleaned
+      await window.imageLibrary.saveCollections(toPlainCollections(cleaned))
+    }
   } catch (error) {
     images.value = []
     const message = error instanceof Error ? error.message : '读取目录失败'
@@ -322,10 +358,9 @@ async function selectDirectory(): Promise<void> {
 <template>
   <main class="page-shell">
     <section class="hero-panel">
-      <p class="eyebrow">Electron + Vue 3 + TypeScript</p>
-      <h1>本地图片资源浏览器</h1>
+      <h1>steam本地游戏封面获取</h1>
       <p class="description">
-        输入 Steam librarycache 文件夹路径，递归查找 library_hero、header_schinese 和 header 图片，并按文件名分类展示。
+        输入 Steam librarycache 文件夹路径，查找 封面图片、背景、宽幅封面图片、徽标。
       </p>
 
       <form class="path-form" @submit.prevent="scanImages()">
@@ -449,7 +484,7 @@ async function selectDirectory(): Promise<void> {
             :aria-selected="activeGroup === group.name"
             @click="activeGroup = group.name"
           >
-            {{ groupDisplayLabel(group.name) }} ({{ group.count }})
+            {{ group.name }} ({{ group.count }})
           </button>
         </div>
 

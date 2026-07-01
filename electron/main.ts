@@ -38,6 +38,7 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   })
+  mainWindow.setMenuBarVisibility(false)
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL
   if (devServerUrl) {
