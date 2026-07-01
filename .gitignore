@@ -5,4 +5,5 @@ dist-electron/
 *.log
 .DS_Store
 collections.json
+app-names.json
 release/

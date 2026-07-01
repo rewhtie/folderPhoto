@@ -6,6 +6,8 @@ export interface ImageAsset {
   sizeBytes: number
   relativePath: string
   groupName: string
+  appId: string
+  appName: string
 }
 
 export interface ScanImagesResult {

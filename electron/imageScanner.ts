@@ -2,12 +2,27 @@ import { access, readdir, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { extname, join, relative, resolve } from 'node:path'
 import { toImageSourceUrl } from './imageProtocol.js'
-import type { ImageAsset, ScanImagesResult } from '../src/shared/imageLibrary.js'
+import { loadAppNames } from './appManifest.js'
+import { loadAppInfoEntries } from './appInfoStore.js'
+import type { AppInfoEntry } from './appInfoParser.js'
+import type { ImageAsset, ScanImagesResult, ScanImagesOptions } from '../src/shared/imageLibrary.js'
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'])
-const IMAGE_NAME_KEYWORDS = ['library_hero', 'header_schinese', 'header']
+const IMAGE_NAME_KEYWORDS = [
+  'library_hero',
+  'header_schinese',
+  'header',
+  'logo_schinese',
+  'library_capsule_schinese',
+  'library_600x900_schinese',
+  'library_600x900',
+  'library_schinese',
+]
 
-export async function scanImages(directoryPath: string): Promise<ScanImagesResult> {
+export async function scanImages(
+  directoryPath: string,
+  options: ScanImagesOptions = {},
+): Promise<ScanImagesResult> {
   const trimmedPath = directoryPath.trim()
 
   if (!trimmedPath) {
@@ -27,15 +42,37 @@ export async function scanImages(directoryPath: string): Promise<ScanImagesResul
     throw new Error('路径不是文件夹')
   }
 
+  const appInfoEntries = await loadAppInfoEntries(absoluteDirectoryPath)
+  const acfNames = await loadAppNames(absoluteDirectoryPath)
+
+  const includeDlc = options.includeDlc ?? false
+
   const images: ImageAsset[] = []
-  await collectLibraryHeroImages(absoluteDirectoryPath, absoluteDirectoryPath, images)
+  await collectLibraryHeroImages(absoluteDirectoryPath, absoluteDirectoryPath, images, appInfoEntries, acfNames, includeDlc)
 
   images.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 
   return { images }
 }
 
-async function collectLibraryHeroImages(rootPath: string, currentPath: string, images: ImageAsset[]): Promise<void> {
+function appIdFromRelativePath(relativePath: string): string {
+  const segments = relativePath.split(/[\\/]/).filter(Boolean)
+  return segments.find((segment) => /^\d+$/.test(segment)) ?? ''
+}
+
+function isDlc(appId: string, entries: Record<string, AppInfoEntry>): boolean {
+  const info = entries[appId]
+  return info?.type?.toLowerCase() === 'dlc'
+}
+
+async function collectLibraryHeroImages(
+  rootPath: string,
+  currentPath: string,
+  images: ImageAsset[],
+  appInfoEntries: Record<string, AppInfoEntry>,
+  acfNames: Record<string, string>,
+  includeDlc: boolean,
+): Promise<void> {
   let entries: string[]
   try {
     entries = await readdir(currentPath)
@@ -53,7 +90,7 @@ async function collectLibraryHeroImages(rootPath: string, currentPath: string, i
     }
 
     if (entryStat.isDirectory()) {
-      await collectLibraryHeroImages(rootPath, absolutePath, images)
+      await collectLibraryHeroImages(rootPath, absolutePath, images, appInfoEntries, acfNames, includeDlc)
       continue
     }
 
@@ -67,14 +104,25 @@ async function collectLibraryHeroImages(rootPath: string, currentPath: string, i
       continue
     }
 
+    const relativePath = relative(rootPath, absolutePath)
+    const appId = appIdFromRelativePath(relativePath)
+
+    if (!includeDlc && appId && isDlc(appId, appInfoEntries)) {
+      continue
+    }
+
+    const appName = acfNames[appId] ?? appInfoEntries[appId]?.name ?? ''
+
     images.push({
       name: entry,
       absolutePath,
       fileUrl: toImageSourceUrl(absolutePath),
       extension,
       sizeBytes: entryStat.size,
-      relativePath: relative(rootPath, absolutePath),
+      relativePath,
       groupName: entry,
+      appId,
+      appName,
     })
   }
 }

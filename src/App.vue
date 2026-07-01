@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
@@ -71,6 +71,25 @@ const collectionNames = computed(() =>
 )
 
 const imageCountLabel = computed(() => `${filteredImages.value.length} / ${images.value.length} 张图片`)
+
+const GROUP_DISPLAY_LABELS: Record<string, string> = {
+  library_hero: '',
+  library_hero_blur: '',
+  library_hero_schinese: '',
+  library_hero_blur_schinese: '',
+  header_schinese: '',
+  header: '',
+  'logo_schinese.png': '徽标',
+  library_capsule_schinese: '封面图片',
+  'library_600x900_schinese.jpg': '竖版封面(中文)',
+  'library_600x900.jpg': '竖版封面',
+  library_schinese: '封面',
+}
+
+function groupDisplayLabel(groupName: string): string {
+  return GROUP_DISPLAY_LABELS[groupName] ?? groupName
+}
+
 const imageGroups = computed(() => {
   const counts = new Map<string, number>()
 
@@ -84,14 +103,35 @@ const imageGroups = computed(() => {
 })
 const activeGroup = ref('全部')
 const searchQuery = ref('')
+const debouncedQuery = ref('')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(searchQuery, (value) => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    debouncedQuery.value = value
+  }, 250)
+})
+
+onUnmounted(() => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+})
+
 const filteredImages = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
+  const query = debouncedQuery.value.trim().toLowerCase()
   const collectionPaths =
     activeCollection.value === '全部' ? null : new Set(collections.value[activeCollection.value] ?? [])
 
   return images.value.filter((image) => {
     const matchesGroup = activeGroup.value === '全部' || image.groupName === activeGroup.value
-    const matchesQuery = !query || image.relativePath.toLowerCase().includes(query)
+    const matchesQuery =
+      !query ||
+      image.relativePath.toLowerCase().includes(query) ||
+      image.appName.toLowerCase().includes(query)
     const matchesCollection = collectionPaths === null || collectionPaths.has(image.absolutePath)
     return matchesGroup && matchesQuery && matchesCollection
   })
@@ -191,6 +231,10 @@ function scrollToTop(): void {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+function scrollByScreen(direction: 1 | -1): void {
+  window.scrollBy({ top: direction * window.innerHeight * 0.8, behavior: 'smooth' })
+}
+
 async function scanImages(pathToScan = directoryPath.value): Promise<void> {
   errorMessage.value = ''
   isLoading.value = true
@@ -283,7 +327,7 @@ async function selectDirectory(): Promise<void> {
           v-model="searchQuery"
           class="search-input"
           type="search"
-          placeholder="搜索路径或 AppID，例如 1598780"
+          placeholder="搜索游戏名、路径或 AppID，例如 NEKOPARA 或 1598780"
           autocomplete="off"
         />
 
@@ -311,7 +355,7 @@ async function selectDirectory(): Promise<void> {
               class="chip-export"
               type="button"
               :disabled="isExporting"
-              title="另存为到目录"
+              title="保存此收藏夹图片（已有会自动略过）"
               @click="exportActiveCollection"
             >
               {{ isExporting ? '⏳' : '⬇' }}
@@ -355,7 +399,7 @@ async function selectDirectory(): Promise<void> {
             :aria-selected="activeGroup === group.name"
             @click="activeGroup = group.name"
           >
-            {{ group.name }} ({{ group.count }})
+            {{ groupDisplayLabel(group.name) }} ({{ group.count }})
           </button>
         </div>
 
@@ -369,19 +413,21 @@ async function selectDirectory(): Promise<void> {
             class="image-card"
             :class="{ 'selected-card': isSelected(image.absolutePath) }"
           >
-            <label class="select-checkbox">
+            <label class="select-checkbox" @click.stop>
               <input
                 type="checkbox"
                 :checked="isSelected(image.absolutePath)"
                 @change="toggleSelected(image.absolutePath)"
               />
             </label>
-            <div class="preview-frame">
+            <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
               <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
             </div>
             <div class="image-meta">
-              <strong :title="image.relativePath">{{ image.relativePath }}</strong>
-              <span>{{ formatFileSize(image.sizeBytes) }}</span>
+              <strong :title="image.appName || image.relativePath">
+                {{ image.appName || image.relativePath }}
+              </strong>
+              <span class="meta-sub">{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
               <button
                 v-if="activeCollection !== '全部'"
                 class="ghost-button remove-button"
@@ -440,9 +486,17 @@ async function selectDirectory(): Promise<void> {
       </div>
     </div>
 
-    <button v-if="showBackToTop" class="back-to-top" type="button" title="回到顶部" @click="scrollToTop">
-      ↑
-    </button>
+    <div class="floating-controls">
+      <button v-if="showBackToTop" class="round-button" type="button" title="向上滚动一屏" @click="scrollByScreen(-1)">
+        ⇑
+      </button>
+      <button v-if="showBackToTop" class="round-button" type="button" title="向下滚动一屏" @click="scrollByScreen(1)">
+        ⇓
+      </button>
+      <button v-if="showBackToTop" class="round-button" type="button" title="回到顶部" @click="scrollToTop">
+        ⬆
+      </button>
+    </div>
 
     <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
   </main>
@@ -730,11 +784,17 @@ button:disabled {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
 }
 
-.back-to-top {
+.floating-controls {
   position: fixed;
   bottom: 28px;
   right: 28px;
   z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.round-button {
   width: 48px;
   height: 48px;
   padding: 0;
@@ -764,17 +824,20 @@ button:disabled {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 2;
+  z-index: 3;
   display: flex;
-  padding: 4px;
-  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   background: rgba(2, 6, 23, 0.7);
   cursor: pointer;
 }
 
 .select-checkbox input {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
 }
 
