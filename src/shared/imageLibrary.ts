@@ -14,4 +14,8 @@ export interface ScanImagesResult {
   images: ImageAsset[]
 }
 
+export interface ScanImagesOptions {
+  includeDlc?: boolean
+}
+
 export type SelectDirectoryResult = string | null

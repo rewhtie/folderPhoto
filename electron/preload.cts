@@ -4,8 +4,8 @@ import type { Collections } from '../src/shared/collections.js'
 import type { ExportResult } from './imageExporter.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
-  scanImages(directoryPath: string): Promise<ScanImagesResult> {
-    return ipcRenderer.invoke('image-library:scan-images', directoryPath)
+  scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
+    return ipcRenderer.invoke('image-library:scan-images', directoryPath, options ?? {})
   },
   selectDirectory(): Promise<SelectDirectoryResult> {
     return ipcRenderer.invoke('image-library:select-directory')

@@ -49,8 +49,8 @@ function createWindow(): void {
   void mainWindow.loadFile(join(__dirname, '../dist/index.html'))
 }
 
-ipcMain.handle('image-library:scan-images', (_event, directoryPath: string) => {
-  return scanImages(directoryPath)
+ipcMain.handle('image-library:scan-images', (_event, directoryPath: string, options: { includeDlc?: boolean }) => {
+  return scanImages(directoryPath, options ?? {})
 })
 
 ipcMain.handle('image-library:select-directory', async () => {

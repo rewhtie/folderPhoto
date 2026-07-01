@@ -12,7 +12,7 @@ interface ExportResult {
 declare global {
   interface Window {
     imageLibrary: {
-      scanImages(directoryPath: string): Promise<ScanImagesResult>
+      scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult>
       selectDirectory(): Promise<SelectDirectoryResult>
       loadCollections(): Promise<Collections>
       saveCollections(collections: Collections): Promise<void>

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
+import type { ScanImagesOptions } from './shared/imageLibrary'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
@@ -12,6 +13,7 @@ const errorMessage = ref('')
 const isLoading = ref(false)
 const isSelectingDirectory = ref(false)
 const hasScanned = ref(false)
+const includeDlc = ref(false)
 
 const collections = ref<Collections>({})
 const selectedPaths = ref<Set<string>>(new Set())
@@ -20,6 +22,35 @@ const isCollectionDialogOpen = ref(false)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
+
+async function downloadSelected(): Promise<void> {
+  if (selectedPaths.value.size === 0) {
+    return
+  }
+
+  const targetDirectory = await window.imageLibrary.chooseExportDirectory()
+  if (!targetDirectory) {
+    return
+  }
+
+  isExporting.value = true
+  try {
+    const result = await window.imageLibrary.exportImages(targetDirectory, [...selectedPaths.value])
+    const parts = [`新增 ${result.copied} 张`]
+    if (result.skipped > 0) {
+      parts.push(`已存在跳过 ${result.skipped} 张`)
+    }
+    if (result.failed.length > 0) {
+      parts.push(`失败 ${result.failed.length} 张`)
+    }
+    showToast(parts.join('，'))
+    clearSelection()
+  } catch {
+    showToast('下载失败')
+  } finally {
+    isExporting.value = false
+  }
+}
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 function showToast(message: string): void {
@@ -37,9 +68,22 @@ async function exportActiveCollection(): Promise<void> {
     return
   }
 
-  const paths = collections.value[activeCollection.value] ?? []
+  let paths = collections.value[activeCollection.value] ?? []
   if (paths.length === 0) {
     return
+  }
+
+  // 如果当前有 Tab 分类筛选，只导出该分类下的图片
+  if (activeGroup.value !== '全部') {
+    paths = paths.filter((absolutePath) =>
+      images.value.some(
+        (img) => img.absolutePath === absolutePath && img.groupName === activeGroup.value,
+      ),
+    )
+    if (paths.length === 0) {
+      showToast('当前分类在收藏夹中没有匹配的图片')
+      return
+    }
   }
 
   const targetDirectory = await window.imageLibrary.chooseExportDirectory()
@@ -241,7 +285,7 @@ async function scanImages(pathToScan = directoryPath.value): Promise<void> {
   hasScanned.value = true
 
   try {
-    const result = await window.imageLibrary.scanImages(pathToScan)
+    const result = await window.imageLibrary.scanImages(pathToScan, { includeDlc: includeDlc.value })
     images.value = result.images
     activeGroup.value = '全部'
     clearSelection()
@@ -327,9 +371,14 @@ async function selectDirectory(): Promise<void> {
           v-model="searchQuery"
           class="search-input"
           type="search"
-          placeholder="搜索游戏名、路径或 AppID，例如 NEKOPARA 或 1598780"
+          placeholder="搜索游戏名、路径或 AppID，例如 雀魂麻将 或 1598780"
           autocomplete="off"
         />
+
+        <label class="dlc-toggle">
+          <input v-model="includeDlc" type="checkbox" @change="hasScanned && scanImages()" />
+          显示 DLC 图片
+        </label>
 
         <div class="collection-bar">
           <span class="collection-label">收藏夹：</span>
@@ -374,6 +423,7 @@ async function selectDirectory(): Promise<void> {
 
         <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
           <span>已选 {{ selectedPaths.size }} 张</span>
+          <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
           <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
           <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
         </div>
@@ -1008,5 +1058,21 @@ button:disabled {
 .image-meta span {
   color: #94a3b8;
   font-size: 13px;
+}
+
+.dlc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dlc-toggle input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 </style>
