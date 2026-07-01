@@ -3,9 +3,17 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
 import { imageSourceUrlToFileUrl } from './imageProtocol.js'
+import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
+import { exportImages } from './imageExporter.js'
+import type { Collections } from '../src/shared/collections.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+// 收藏夹存储位置：打包后放 exe 同级目录，开发时放项目根目录，均不写入 C 盘系统目录
+const packagedDirectory = process.env.PORTABLE_EXECUTABLE_DIR ?? dirname(app.getPath('exe'))
+const collectionsDirectory = app.isPackaged ? packagedDirectory : join(__dirname, '..', '..')
+setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -56,6 +64,31 @@ ipcMain.handle('image-library:select-directory', async () => {
   }
 
   return result.filePaths[0]
+})
+
+ipcMain.handle('collections:load', () => {
+  return loadCollections()
+})
+
+ipcMain.handle('collections:save', (_event, collections: Collections) => {
+  return saveCollections(collections)
+})
+
+ipcMain.handle('collections:choose-export-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    title: '选择导出目录',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
+})
+
+ipcMain.handle('collections:export-images', (_event, targetDirectory: string, absolutePaths: string[]) => {
+  return exportImages(targetDirectory, absolutePaths)
 })
 
 app.whenReady().then(() => {

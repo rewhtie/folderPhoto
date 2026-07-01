@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
+import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
@@ -11,6 +12,63 @@ const errorMessage = ref('')
 const isLoading = ref(false)
 const isSelectingDirectory = ref(false)
 const hasScanned = ref(false)
+
+const collections = ref<Collections>({})
+const selectedPaths = ref<Set<string>>(new Set())
+const activeCollection = ref('全部')
+const isCollectionDialogOpen = ref(false)
+const collectionNameInput = ref('')
+const isExporting = ref(false)
+const toastMessage = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+
+function showToast(message: string): void {
+  toastMessage.value = message
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+  toastTimer = setTimeout(() => {
+    toastMessage.value = ''
+  }, 2600)
+}
+
+async function exportActiveCollection(): Promise<void> {
+  if (activeCollection.value === '全部') {
+    return
+  }
+
+  const paths = collections.value[activeCollection.value] ?? []
+  if (paths.length === 0) {
+    return
+  }
+
+  const targetDirectory = await window.imageLibrary.chooseExportDirectory()
+  if (!targetDirectory) {
+    return
+  }
+
+  isExporting.value = true
+
+  try {
+    const result = await window.imageLibrary.exportImages(targetDirectory, [...paths])
+    const parts = [`新增 ${result.copied} 张`]
+    if (result.skipped > 0) {
+      parts.push(`已存在跳过 ${result.skipped} 张`)
+    }
+    if (result.failed.length > 0) {
+      parts.push(`失败 ${result.failed.length} 张`)
+    }
+    showToast(parts.join('，'))
+  } catch {
+    showToast('导出失败')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const collectionNames = computed(() =>
+  Object.keys(collections.value).sort((a, b) => a.localeCompare(b)),
+)
 
 const imageCountLabel = computed(() => `${filteredImages.value.length} / ${images.value.length} 张图片`)
 const imageGroups = computed(() => {
@@ -28,13 +86,110 @@ const activeGroup = ref('全部')
 const searchQuery = ref('')
 const filteredImages = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
+  const collectionPaths =
+    activeCollection.value === '全部' ? null : new Set(collections.value[activeCollection.value] ?? [])
 
   return images.value.filter((image) => {
     const matchesGroup = activeGroup.value === '全部' || image.groupName === activeGroup.value
     const matchesQuery = !query || image.relativePath.toLowerCase().includes(query)
-    return matchesGroup && matchesQuery
+    const matchesCollection = collectionPaths === null || collectionPaths.has(image.absolutePath)
+    return matchesGroup && matchesQuery && matchesCollection
   })
 })
+
+function isSelected(path: string): boolean {
+  return selectedPaths.value.has(path)
+}
+
+function toggleSelected(path: string): void {
+  const next = new Set(selectedPaths.value)
+  if (next.has(path)) {
+    next.delete(path)
+  } else {
+    next.add(path)
+  }
+  selectedPaths.value = next
+}
+
+function clearSelection(): void {
+  selectedPaths.value = new Set()
+}
+
+async function addSelectedToCollection(): Promise<void> {
+  if (selectedPaths.value.size === 0) {
+    return
+  }
+
+  collectionNameInput.value = ''
+  isCollectionDialogOpen.value = true
+}
+
+function cancelCollectionDialog(): void {
+  isCollectionDialogOpen.value = false
+}
+
+async function confirmCollectionDialog(): Promise<void> {
+  const name = collectionNameInput.value.trim()
+  if (!name || selectedPaths.value.size === 0) {
+    isCollectionDialogOpen.value = false
+    return
+  }
+
+  collections.value = addPathsToCollection(collections.value, name, [...selectedPaths.value])
+  await window.imageLibrary.saveCollections(toPlainCollections(collections.value))
+  const count = selectedPaths.value.size
+  clearSelection()
+  isCollectionDialogOpen.value = false
+  showToast(`已加入「${name}」${count} 张图片`)
+}
+
+function toPlainCollections(value: Collections): Collections {
+  const plain: Collections = {}
+  for (const [name, paths] of Object.entries(value)) {
+    plain[name] = [...paths]
+  }
+  return plain
+}
+
+async function deleteCollection(name: string): Promise<void> {
+  const next = { ...collections.value }
+  delete next[name]
+  collections.value = next
+
+  if (activeCollection.value === name) {
+    activeCollection.value = '全部'
+  }
+
+  await window.imageLibrary.saveCollections(toPlainCollections(collections.value))
+  showToast(`已删除收藏夹「${name}」`)
+}
+
+async function removeFromCollection(path: string, name: string): Promise<void> {
+  collections.value = removePathFromCollection(collections.value, name, path)
+  if (!collections.value[activeCollection.value]) {
+    activeCollection.value = '全部'
+  }
+  await window.imageLibrary.saveCollections(toPlainCollections(collections.value))
+}
+
+onMounted(async () => {
+  collections.value = await window.imageLibrary.loadCollections()
+  window.addEventListener('scroll', handleScroll, { passive: true })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
+
+const showBackToTop = ref(false)
+
+function handleScroll(): void {
+  showBackToTop.value = window.scrollY > 400
+}
+
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 
 async function scanImages(pathToScan = directoryPath.value): Promise<void> {
   errorMessage.value = ''
@@ -45,6 +200,7 @@ async function scanImages(pathToScan = directoryPath.value): Promise<void> {
     const result = await window.imageLibrary.scanImages(pathToScan)
     images.value = result.images
     activeGroup.value = '全部'
+    clearSelection()
   } catch (error) {
     images.value = []
     const message = error instanceof Error ? error.message : '读取目录失败'
@@ -131,6 +287,53 @@ async function selectDirectory(): Promise<void> {
           autocomplete="off"
         />
 
+        <div class="collection-bar">
+          <span class="collection-label">收藏夹：</span>
+          <button
+            class="chip"
+            :class="{ 'active-chip': activeCollection === '全部' }"
+            type="button"
+            @click="activeCollection = '全部'"
+          >
+            全部
+          </button>
+          <span
+            v-for="name in collectionNames"
+            :key="name"
+            class="chip chip-group"
+            :class="{ 'active-chip': activeCollection === name }"
+          >
+            <button class="chip-name" type="button" @click="activeCollection = name">
+              {{ name }} ({{ collections[name].length }})
+            </button>
+            <button
+              v-if="activeCollection === name"
+              class="chip-export"
+              type="button"
+              :disabled="isExporting"
+              title="另存为到目录"
+              @click="exportActiveCollection"
+            >
+              {{ isExporting ? '⏳' : '⬇' }}
+            </button>
+            <button
+              v-if="activeCollection === name"
+              class="chip-delete"
+              type="button"
+              title="删除此收藏夹"
+              @click="deleteCollection(name)"
+            >
+              ✕
+            </button>
+          </span>
+        </div>
+
+        <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
+          <span>已选 {{ selectedPaths.size }} 张</span>
+          <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
+          <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
+        </div>
+
         <div class="tab-list" role="tablist" aria-label="按文件名筛选">
           <button
             class="tab-button"
@@ -160,13 +363,33 @@ async function selectDirectory(): Promise<void> {
           没有匹配的图片。
         </div>
         <div v-else class="image-grid">
-          <article v-for="image in filteredImages" :key="image.absolutePath" class="image-card">
+          <article
+            v-for="image in filteredImages"
+            :key="image.absolutePath"
+            class="image-card"
+            :class="{ 'selected-card': isSelected(image.absolutePath) }"
+          >
+            <label class="select-checkbox">
+              <input
+                type="checkbox"
+                :checked="isSelected(image.absolutePath)"
+                @change="toggleSelected(image.absolutePath)"
+              />
+            </label>
             <div class="preview-frame">
               <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
             </div>
             <div class="image-meta">
               <strong :title="image.relativePath">{{ image.relativePath }}</strong>
               <span>{{ formatFileSize(image.sizeBytes) }}</span>
+              <button
+                v-if="activeCollection !== '全部'"
+                class="ghost-button remove-button"
+                type="button"
+                @click="removeFromCollection(image.absolutePath, activeCollection)"
+              >
+                从「{{ activeCollection }}」移除
+              </button>
             </div>
           </article>
         </div>
@@ -176,6 +399,52 @@ async function selectDirectory(): Promise<void> {
         选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击“扫描”。
       </div>
     </section>
+
+    <div v-if="isCollectionDialogOpen" class="dialog-backdrop" @click.self="cancelCollectionDialog">
+      <div class="dialog">
+        <h3>加入收藏夹</h3>
+        <p>为选中的 {{ selectedPaths.size }} 张图片指定收藏夹</p>
+
+        <input
+          v-model="collectionNameInput"
+          class="dialog-input"
+          type="text"
+          placeholder="输入新收藏夹名称，例如：黄油"
+          autocomplete="off"
+          @keyup.enter="confirmCollectionDialog"
+        />
+
+        <div v-if="collectionNames.length > 0" class="picker">
+          <p class="picker-label">选择已有收藏夹</p>
+          <div class="picker-list">
+            <button
+              v-for="name in collectionNames"
+              :key="name"
+              class="picker-item"
+              :class="{ 'picker-item-active': collectionNameInput.trim() === name }"
+              type="button"
+              @click="collectionNameInput = name"
+            >
+              <span class="picker-name">{{ name }}</span>
+              <span class="picker-count">{{ collections[name].length }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" @click="cancelCollectionDialog">取消</button>
+          <button type="button" :disabled="!collectionNameInput.trim()" @click="confirmCollectionDialog">
+            加入
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <button v-if="showBackToTop" class="back-to-top" type="button" title="回到顶部" @click="scrollToTop">
+      ↑
+    </button>
+
+    <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
   </main>
 </template>
 
@@ -344,6 +613,273 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.collection-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.collection-label {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(147, 197, 253, 0.28);
+  border-radius: 999px;
+  color: #dbeafe;
+  background: rgba(59, 130, 246, 0.14);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chip-group {
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+}
+
+.chip-name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chip-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  background: rgba(8, 47, 73, 0.25);
+  color: #082f49;
+}
+
+.chip-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  background: rgba(127, 29, 29, 0.5);
+  color: #fecaca;
+}
+
+.active-chip {
+  color: #082f49;
+  background: #7dd3fc;
+}
+
+.active-chip .chip-name {
+  color: #082f49;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #e2e8f0;
+}
+
+.selection-bar button {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: rgba(23, 32, 51, 0.97);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  color: #e2e8f0;
+  font-size: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.floating-selection {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 12;
+  margin-bottom: 0;
+  background: rgba(23, 32, 51, 0.96);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.back-to-top {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 12;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.ghost-button {
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 12px;
+  color: #dbeafe;
+  background: transparent;
+}
+
+.remove-button {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.selected-card {
+  outline: 2px solid #7dd3fc;
+}
+
+.select-checkbox {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.7);
+  cursor: pointer;
+}
+
+.select-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.66);
+}
+
+.dialog {
+  width: 380px;
+  max-width: 90vw;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  background: #172033;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.dialog h3 {
+  margin: 0 0 8px;
+}
+
+.dialog p {
+  margin: 0 0 16px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.dialog-input {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.picker {
+  margin-bottom: 20px;
+}
+
+.picker-label {
+  margin: 0 0 10px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.picker-item:hover {
+  border-color: rgba(125, 211, 252, 0.55);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.picker-item-active {
+  border-color: #7dd3fc;
+  background: rgba(125, 211, 252, 0.18);
+}
+
+.picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-count {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.28);
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .tab-list {
   display: flex;
   flex-wrap: wrap;
@@ -371,6 +907,7 @@ button:disabled {
 }
 
 .image-card {
+  position: relative;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 18px;
