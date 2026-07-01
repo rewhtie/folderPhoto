@@ -5,6 +5,7 @@ import { scanImages } from './imageScanner.js'
 import { imageSourceUrlToFileUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
 import { exportImages } from './imageExporter.js'
+import { loadSteamCollections } from './steamCollections.js'
 import type { Collections } from '../src/shared/collections.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -52,6 +53,10 @@ function createWindow(): void {
 
 ipcMain.handle('image-library:scan-images', (_event, directoryPath: string, options: { includeDlc?: boolean }) => {
   return scanImages(directoryPath, options ?? {})
+})
+
+ipcMain.handle('steam-collections:load', (_event, librarycacheDir: string) => {
+  return loadSteamCollections(librarycacheDir)
 })
 
 ipcMain.handle('image-library:select-directory', async () => {

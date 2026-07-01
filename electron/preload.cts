@@ -2,10 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { ScanImagesResult, SelectDirectoryResult } from '../src/shared/imageLibrary.js'
 import type { Collections } from '../src/shared/collections.js'
 import type { ExportResult } from './imageExporter.js'
+import type { SteamCollection } from './steamCollections.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
   scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
     return ipcRenderer.invoke('image-library:scan-images', directoryPath, options ?? {})
+  },
+  loadSteamCollections(librarycacheDir: string): Promise<SteamCollection[]> {
+    return ipcRenderer.invoke('steam-collections:load', librarycacheDir)
   },
   selectDirectory(): Promise<SelectDirectoryResult> {
     return ipcRenderer.invoke('image-library:select-directory')

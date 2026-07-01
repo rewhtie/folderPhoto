@@ -9,10 +9,16 @@ interface ExportResult {
   failed: string[]
 }
 
+interface SteamCollection {
+  name: string
+  appIds: string[]
+}
+
 declare global {
   interface Window {
     imageLibrary: {
       scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult>
+      loadSteamCollections(librarycacheDir: string): Promise<SteamCollection[]>
       selectDirectory(): Promise<SelectDirectoryResult>
       loadCollections(): Promise<Collections>
       saveCollections(collections: Collections): Promise<void>

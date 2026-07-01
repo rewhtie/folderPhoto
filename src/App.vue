@@ -16,12 +16,62 @@ const hasScanned = ref(false)
 const includeDlc = ref(false)
 
 const collections = ref<Collections>({})
+const steamCollections = ref<Collections>({})
 const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
+
+async function importSteamCollections(): Promise<void> {
+  if (images.value.length === 0) {
+    showToast('请先扫描图片再导入 Steam 收藏夹')
+    return
+  }
+
+  try {
+    const data = await window.imageLibrary.loadSteamCollections(directoryPath.value)
+    if (data.length === 0) {
+      showToast('未找到 Steam 收藏夹')
+      return
+    }
+
+    const imagesByAppId = new Map<string, string[]>()
+    for (const image of images.value) {
+      if (!image.appId) continue
+      const list = imagesByAppId.get(image.appId)
+      if (list) {
+        list.push(image.absolutePath)
+      } else {
+        imagesByAppId.set(image.appId, [image.absolutePath])
+      }
+    }
+
+    let imported = 0
+    const steam = { ...steamCollections.value }
+    for (const sc of data) {
+      const paths: string[] = []
+      for (const appId of sc.appIds) {
+        const matched = imagesByAppId.get(appId)
+        if (matched) paths.push(...matched)
+      }
+      if (paths.length === 0) continue
+      steam[sc.name] = paths
+      imported += 1
+    }
+
+    if (imported === 0) {
+      showToast('Steam 收藏夹里没有匹配到本地图片')
+      return
+    }
+
+    steamCollections.value = steam
+    showToast(`已导入 ${imported} 个 Steam 收藏夹`)
+  } catch {
+    showToast('导入 Steam 收藏夹失败')
+  }
+}
 
 async function downloadSelected(): Promise<void> {
   if (selectedPaths.value.size === 0) {
@@ -110,8 +160,53 @@ async function exportActiveCollection(): Promise<void> {
   }
 }
 
+async function exportSteamCollection(name: string): Promise<void> {
+  let paths = steamCollections.value[name] ?? []
+  if (paths.length === 0) {
+    return
+  }
+
+  if (activeGroup.value !== '全部') {
+    paths = paths.filter((absolutePath) =>
+      images.value.some(
+        (img) => img.absolutePath === absolutePath && img.groupName === activeGroup.value,
+      ),
+    )
+    if (paths.length === 0) {
+      showToast('当前分类在收藏夹中没有匹配的图片')
+      return
+    }
+  }
+
+  const targetDirectory = await window.imageLibrary.chooseExportDirectory()
+  if (!targetDirectory) {
+    return
+  }
+
+  isExporting.value = true
+
+  try {
+    const result = await window.imageLibrary.exportImages(targetDirectory, [...paths])
+    const parts = [`新增 ${result.copied} 张`]
+    if (result.skipped > 0) {
+      parts.push(`已存在跳过 ${result.skipped} 张`)
+    }
+    if (result.failed.length > 0) {
+      parts.push(`失败 ${result.failed.length} 张`)
+    }
+    showToast(parts.join('，'))
+  } catch {
+    showToast('导出失败')
+  } finally {
+    isExporting.value = false
+  }
+}
+
 const collectionNames = computed(() =>
   Object.keys(collections.value).sort((a, b) => a.localeCompare(b)),
+)
+const steamCollectionNames = computed(() =>
+  Object.keys(steamCollections.value).sort((a, b) => a.localeCompare(b)),
 )
 
 const imageCountLabel = computed(() => `${filteredImages.value.length} / ${images.value.length} 张图片`)
@@ -183,7 +278,10 @@ onUnmounted(() => {
 const filteredImages = computed(() => {
   const query = debouncedQuery.value.trim().toLowerCase()
   const collectionPaths =
-    activeCollection.value === '全部' ? null : new Set(collections.value[activeCollection.value] ?? [])
+    activeCollection.value === '全部' ? null : new Set([
+      ...(collections.value[activeCollection.value] ?? []),
+      ...(steamCollections.value[activeCollection.value] ?? []),
+    ])
 
   return images.value.filter((image) => {
     const matchesGroup =
@@ -379,6 +477,15 @@ async function selectDirectory(): Promise<void> {
           <button type="submit" :disabled="isLoading || isSelectingDirectory">
             {{ isLoading ? '扫描中...' : '扫描' }}
           </button>
+          <button
+            class="secondary-button"
+            type="button"
+            :disabled="isLoading || images.length === 0"
+            title="从 Steam 客户端读取本机收藏夹，按 AppID 匹配本地图片并导入"
+            @click="importSteamCollections"
+          >
+            导入 Steam 收藏夹
+          </button>
         </div>
       </form>
     </section>
@@ -416,15 +523,14 @@ async function selectDirectory(): Promise<void> {
         </label>
 
         <div class="collection-bar">
-          <span class="collection-label">收藏夹：</span>
-          <button
-            class="chip"
+          <span class="collection-label">自定义收藏夹：</span>
+          <span
+            class="chip chip-group"
             :class="{ 'active-chip': activeCollection === '全部' }"
-            type="button"
             @click="activeCollection = '全部'"
           >
             全部
-          </button>
+          </span>
           <span
             v-for="name in collectionNames"
             :key="name"
@@ -432,7 +538,7 @@ async function selectDirectory(): Promise<void> {
             :class="{ 'active-chip': activeCollection === name }"
           >
             <button class="chip-name" type="button" @click="activeCollection = name">
-              {{ name }} ({{ collections[name].length }})
+              {{ name }} ({{ collections[name]?.length ?? 0 }})
             </button>
             <button
               v-if="activeCollection === name"
@@ -456,6 +562,30 @@ async function selectDirectory(): Promise<void> {
           </span>
         </div>
 
+        <div class="collection-bar" v-if="steamCollectionNames.length > 0">
+          <span class="collection-label">Steam 收藏夹：</span>
+          <span
+            v-for="name in steamCollectionNames"
+            :key="name"
+            class="chip chip-group"
+            :class="{ 'active-chip': activeCollection === name }"
+          >
+            <button class="chip-name" type="button" @click="activeCollection = name">
+              {{ name }} ({{ steamCollections[name]?.length ?? 0 }})
+            </button>
+            <button
+              v-if="activeCollection === name"
+              class="chip-export"
+              type="button"
+              :disabled="isExporting"
+              title="保存此收藏夹图片（已有会自动略过）"
+              @click="exportSteamCollection(name)"
+            >
+              {{ isExporting ? '⏳' : '⬇' }}
+            </button>
+          </span>
+        </div>
+
         <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
           <span>已选 {{ selectedPaths.size }} 张</span>
           <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
@@ -463,29 +593,28 @@ async function selectDirectory(): Promise<void> {
           <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
         </div>
 
-        <div class="tab-list" role="tablist" aria-label="按文件名筛选">
-          <button
-            class="tab-button"
-            :class="{ 'active-tab': activeGroup === '全部' }"
-            type="button"
+        <div class="collection-bar" role="tablist" aria-label="按文件名筛选">
+          <span class="collection-label">分类：</span>
+          <span
+            class="chip"
+            :class="{ 'active-chip': activeGroup === '全部' }"
             role="tab"
             :aria-selected="activeGroup === '全部'"
             @click="activeGroup = '全部'"
           >
             全部 ({{ images.length }})
-          </button>
-          <button
+          </span>
+          <span
             v-for="group in imageGroups"
             :key="group.name"
-            class="tab-button"
-            :class="{ 'active-tab': activeGroup === group.name }"
-            type="button"
+            class="chip"
+            :class="{ 'active-chip': activeGroup === group.name }"
             role="tab"
             :aria-selected="activeGroup === group.name"
             @click="activeGroup = group.name"
           >
             {{ group.name }} ({{ group.count }})
-          </button>
+          </span>
         </div>
 
         <div v-if="filteredImages.length === 0" class="state-card muted-state">
@@ -769,6 +898,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   padding: 8px 12px;
+  cursor: pointer;
   border: 1px solid rgba(147, 197, 253, 0.28);
   border-radius: 999px;
   color: #dbeafe;
@@ -779,7 +909,7 @@ button:disabled {
 
 .chip-group {
   gap: 6px;
-  padding: 4px 6px 4px 12px;
+  padding: 4px 12px;
 }
 
 .chip-name {
@@ -795,11 +925,11 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border-radius: 50%;
-  font-size: 14px;
+  font-size: 12px;
   background: rgba(8, 47, 73, 0.25);
   color: #082f49;
 }
@@ -808,8 +938,8 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border-radius: 50%;
   font-size: 12px;
@@ -1028,25 +1158,6 @@ button:disabled {
   gap: 10px;
 }
 
-.tab-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.tab-button {
-  padding: 10px 14px;
-  border: 1px solid rgba(147, 197, 253, 0.24);
-  border-radius: 999px;
-  color: #dbeafe;
-  background: rgba(59, 130, 246, 0.14);
-}
-
-.active-tab {
-  color: #082f49;
-  background: #7dd3fc;
-}
 
 .image-grid {
   display: grid;
