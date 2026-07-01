@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist-electron",
+    "rootDir": ".",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["electron/**/*.ts", "electron/**/*.cts", "src/shared/**/*.ts"],
+  "exclude": ["**/*.test.ts", "vite.config.ts"]
+}
