@@ -234,12 +234,25 @@ function groupDisplayLabel(groupName: string): string {
   return FILE_NAME_CONFIG[groupName] ?? groupName
 }
 
+// 当前收藏夹筛选范围内的图片（仅按收藏夹筛选，不按分类/搜索）
+const collectionScopedImages = computed(() => {
+  if (activeCollection.value === '全部') {
+    return images.value
+  }
+  const collectionPaths = new Set([
+    ...(collections.value[activeCollection.value] ?? []),
+    ...(steamCollections.value[activeCollection.value] ?? []),
+  ])
+  return images.value.filter((image) => collectionPaths.has(image.absolutePath))
+})
+
 const imageGroups = computed(() => {
+  const scoped = collectionScopedImages.value
   // 按显示标签分组，同名标签合并为一个 Tab
   const counts = new Map<string, { label: string; fileNames: string[] }>()
   const seenGroups = new Set<string>()
 
-  for (const image of images.value) {
+  for (const image of scoped) {
     if (seenGroups.has(image.groupName)) continue
     seenGroups.add(image.groupName)
     const label = groupDisplayLabel(image.groupName)
@@ -252,7 +265,7 @@ const imageGroups = computed(() => {
 
   // 统计每个 Tab 的实际图片数量
   const imageCounts = new Map<string, number>()
-  for (const image of images.value) {
+  for (const image of scoped) {
     const label = groupDisplayLabel(image.groupName)
     imageCounts.set(label, (imageCounts.get(label) ?? 0) + 1)
   }
@@ -260,7 +273,7 @@ const imageGroups = computed(() => {
   // 构建 Tab 列表，保留输入顺序
   const tabOrder = [
     ...new Set(
-      [...Object.values(FILE_NAME_CONFIG), ...images.value.map((img) => groupDisplayLabel(img.groupName))].filter(
+      [...Object.values(FILE_NAME_CONFIG), ...scoped.map((img) => groupDisplayLabel(img.groupName))].filter(
         (v, i, a) => a.indexOf(v) === i,
       ),
     ),
@@ -622,7 +635,7 @@ async function selectDirectory(): Promise<void> {
             :aria-selected="activeGroup === '全部'"
             @click="activeGroup = '全部'"
           >
-            全部 ({{ images.length }})
+            全部 ({{ collectionScopedImages.length }})
           </span>
           <span
             v-for="group in imageGroups"
