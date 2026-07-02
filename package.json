@@ -38,11 +38,13 @@
   },
   "devDependencies": {
     "@types/node": "latest",
+    "@unocss/preset-uno": "^66.7.4",
     "@vue/tsconfig": "latest",
     "concurrently": "latest",
     "cross-env": "latest",
     "electron-builder": "latest",
     "typescript": "latest",
+    "unocss": "^66.7.4",
     "vite": "latest",
     "vitest": "latest",
     "vue-tsc": "latest",
