@@ -71,7 +71,7 @@ export function computeLayout(
   const safeCols = Math.max(1, Math.floor(cols))
   const safeRows = Math.max(1, Math.floor(rows))
   const cellW = totalWidth / safeCols
-  const cellH = cellW
+  const cellH = cellW / dominantAspectRatio(images)
   const canvasWidth = totalWidth
   const canvasHeight = cellH * safeRows
 

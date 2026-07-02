@@ -35,31 +35,54 @@ describe('computeLayout', () => {
     expect(layout.draws).toHaveLength(4)
   })
 
-  it('places cells row-major and clips to cover', () => {
-    // 横图 200×100 放进 100×100 格子：cover 居中裁剪，sw=100, sh=100, sx=50, sy=0
+  it('derives cell height from dominant aspect ratio', () => {
+    // 单张 200×100（ratio 2）→ cellH = cellW / 2
     const images = [{ width: 200, height: 100 }]
     const layout = computeLayout(images, 1, 1, 100)
     const d = layout.draws[0]
-    expect(d.index).toBe(0)
-    expect(d.dx).toBe(0)
-    expect(d.dy).toBe(0)
+    expect(layout.cellH).toBe(50)
+    expect(layout.canvasHeight).toBe(50)
     expect(d.dw).toBe(100)
-    expect(d.dh).toBe(100)
-    expect(d.sw).toBe(100)
+    expect(d.dh).toBe(50)
+    expect(d.sw).toBe(200) // 比例一致，不裁剪
     expect(d.sh).toBe(100)
-    expect(d.sx).toBe(50) // (200-100)/2
+    expect(d.sx).toBe(0)
     expect(d.sy).toBe(0)
   })
 
+  it('clips wide images whose ratio differs from dominant aspect', () => {
+    // 众数比例 1（两张正方），中间一张横图被居中裁剪
+    const images = [
+      { width: 100, height: 100 },
+      { width: 200, height: 100 },
+      { width: 100, height: 100 },
+    ]
+    const layout = computeLayout(images, 1, 3, 300)
+    expect(layout.cellH).toBe(100) // dominant=1 → 正方格
+    const wide = layout.draws[1]
+    expect(wide.sw).toBe(100) // 从 200 宽裁出 100
+    expect(wide.sh).toBe(100)
+    expect(wide.sx).toBe(50) // 居中
+    expect(wide.sy).toBe(0)
+    expect(wide.dx).toBe(100)
+    expect(wide.dy).toBe(0)
+    expect(wide.dw).toBe(100)
+    expect(wide.dh).toBe(100)
+  })
+
   it('clips vertical images centered', () => {
-    // 竖图 100×200 放进 100×100 格子：sh=100, sy=50, sx=0, sw=100
-    const images = [{ width: 100, height: 200 }]
-    const layout = computeLayout(images, 1, 1, 100)
-    const d = layout.draws[0]
-    expect(d.sw).toBe(100)
-    expect(d.sh).toBe(100)
-    expect(d.sx).toBe(0)
-    expect(d.sy).toBe(50)
+    // 众数比例 1，中间一张竖图被居中裁剪
+    const images = [
+      { width: 100, height: 100 },
+      { width: 100, height: 200 },
+      { width: 100, height: 100 },
+    ]
+    const layout = computeLayout(images, 1, 3, 300)
+    const tall = layout.draws[1]
+    expect(tall.sw).toBe(100)
+    expect(tall.sh).toBe(100)
+    expect(tall.sx).toBe(0)
+    expect(tall.sy).toBe(50) // 居中
   })
 
   it('leaves empty cells when grid exceeds image count (tolerance)', () => {
