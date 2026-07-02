@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="unocss/preset-uno" />
 
 import type { ScanImagesResult, SelectDirectoryResult } from './shared/imageLibrary'
 import type { Collections } from './shared/collections'
@@ -24,6 +25,7 @@ declare global {
       saveCollections(collections: Collections): Promise<void>
       chooseExportDirectory(): Promise<string | null>
       exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult>
+      saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
     }
   }
 }

@@ -97,6 +97,25 @@ ipcMain.handle('collections:export-images', (_event, targetDirectory: string, ab
   return exportImages(targetDirectory, absolutePaths)
 })
 
+ipcMain.handle('collage:save', async (_event, buffer: ArrayBuffer, suggestedName: string) => {
+  const result = await dialog.showSaveDialog({
+    title: '保存拼图',
+    defaultPath: suggestedName,
+    filters: [
+      { name: 'PNG', extensions: ['png'] },
+      { name: 'JPG', extensions: ['jpg', 'jpeg'] },
+    ],
+  })
+
+  if (result.canceled || result.filePath.length === 0) {
+    return null
+  }
+
+  const { writeFile } = await import('node:fs/promises')
+  await writeFile(result.filePath, Buffer.from(buffer))
+  return result.filePath
+})
+
 app.whenReady().then(() => {
   protocol.handle('local-image', (request) => net.fetch(imageSourceUrlToFileUrl(request.url)))
 
