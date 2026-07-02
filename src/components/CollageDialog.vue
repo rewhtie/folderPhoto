@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { computeLayout, moveItem, type CollageImage } from '../shared/collage'
+import { computeLayout, dominantAspectRatio, moveItem, type CollageImage } from '../shared/collage'
 
 const props = defineProps<{ urls: string[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -19,6 +19,19 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const orderedIndices = ref<number[]>([])
 // 非响应式，纯导出用：按原始下标存 <img> 元素引用
 const imgRefMap = new Map<number, HTMLImageElement>()
+// 图片加载计数，触发 cellRatio 重算
+const loadedCount = ref(0)
+// 根据已加载图片众数宽高比计算单元格比例（与 computeLayout 一致）
+const cellRatio = computed(() => {
+  loadedCount.value // 依赖
+  const imgs: { width: number; height: number }[] = []
+  for (const [, img] of imgRefMap) {
+    if (img.complete && img.naturalHeight > 0) {
+      imgs.push({ width: img.naturalWidth, height: img.naturalHeight })
+    }
+  }
+  return dominantAspectRatio(imgs)
+})
 
 const defaultRows = computed(() => Math.max(1, Math.ceil(Math.sqrt(n.value))))
 const defaultCols = computed(() => Math.max(1, Math.ceil(n.value / defaultRows.value)))
@@ -38,35 +51,41 @@ function registerImg(idx: number, el: unknown): void {
 }
 
 // --- 拖拽 ---
+// 注意：dragFrom / dragOverIdx 存的是网格位置（pos），不是原始图片下标（idx）
+// v-for="(idx, pos) in orderedIndices" 中 pos 是位置，idx 是值
 let dragFrom = -1
-const dragOverIdx = ref(-1)
+const dragOverPos = ref(-1)
 
-function onDragStart(idx: number, e: DragEvent): void {
-  dragFrom = idx
+function onDragStart(pos: number, e: DragEvent): void {
+  dragFrom = pos
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
   }
-  // 拖拽视觉反馈由 CSS :active 伪类处理（collage-thumb:active { opacity: 0.5 }）
 }
 
-function onDragOver(idx: number, e: DragEvent): void {
-  e.preventDefault() // 允许 drop
+function onDragOver(pos: number, e: DragEvent): void {
+  e.preventDefault()
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = 'move'
   }
-  dragOverIdx.value = idx
+  dragOverPos.value = pos
 }
 
-function onDrop(idx: number, e: DragEvent): void {
+function onDrop(pos: number, e: DragEvent): void {
   e.preventDefault()
-  if (dragFrom === -1 || dragFrom === idx) return
-  orderedIndices.value = moveItem(orderedIndices.value, dragFrom, idx)
+  if (dragFrom === -1 || dragFrom === pos) return
+  orderedIndices.value = moveItem(orderedIndices.value, dragFrom, pos)
   dragFrom = -1
+  dragOverPos.value = -1
 }
 
 function onDragEnd(): void {
   dragFrom = -1
-  dragOverIdx.value = -1
+  dragOverPos.value = -1
+}
+
+function onImgLoad(): void {
+  loadedCount.value++
 }
 
 // --- 导出用 draw ---
@@ -170,18 +189,20 @@ async function exportCollage(): Promise<void> {
         :style="{ gridTemplateColumns: `repeat(${cols}, 1fr)` }"
       >
         <img
-          v-for="idx in orderedIndices"
+          v-for="(idx, pos) in orderedIndices"
           :key="idx"
           :ref="(el) => registerImg(idx, el)"
           :src="urls[idx]"
           crossOrigin="anonymous"
           draggable="true"
           class="collage-thumb"
-          :class="{ 'collage-thumb-dragover': dragOverIdx === idx }"
-          @dragstart="onDragStart(idx, $event)"
-          @dragover="onDragOver(idx, $event)"
-          @dragleave="dragOverIdx = -1"
-          @drop="onDrop(idx, $event)"
+          :style="{ aspectRatio: cellRatio }"
+          :class="{ 'collage-thumb-dragover': dragOverPos === pos }"
+          @load="onImgLoad"
+          @dragstart="onDragStart(pos, $event)"
+          @dragover="onDragOver(pos, $event)"
+          @dragleave="dragOverPos = -1"
+          @drop="onDrop(pos, $event)"
           @dragend="onDragEnd"
         />
       </div>
@@ -265,7 +286,6 @@ async function exportCollage(): Promise<void> {
 }
 .collage-thumb {
   width: 100%;
-  aspect-ratio: 1;
   object-fit: cover;
   border-radius: 6px;
   border: 2px solid transparent;
