@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeLayout, dominantAspectRatio } from './collage'
+import { computeLayout, dominantAspectRatio, moveItem } from './collage'
 
 describe('dominantAspectRatio', () => {
   it('returns the most common ratio rounded to 0.01', () => {
@@ -121,5 +121,29 @@ describe('computeLayout', () => {
     const layout = computeLayout(images, 1, 1, 256)
     expect(layout.canvasWidth).toBe(256)
     expect(layout.cellW).toBe(256)
+  })
+})
+
+describe('moveItem', () => {
+  it('moves an item forward', () => {
+    expect(moveItem([10, 20, 30, 40], 0, 2)).toEqual([20, 30, 10, 40])
+  })
+
+  it('moves an item backward', () => {
+    expect(moveItem([10, 20, 30, 40], 3, 1)).toEqual([10, 40, 20, 30])
+  })
+
+  it('is a no-op when from === to', () => {
+    expect(moveItem([10, 20, 30], 1, 1)).toEqual([10, 20, 30])
+  })
+
+  it('handles single-element array', () => {
+    expect(moveItem([10], 0, 0)).toEqual([10])
+  })
+
+  it('does not mutate the original array', () => {
+    const arr = [10, 20, 30]
+    moveItem(arr, 0, 2)
+    expect(arr).toEqual([10, 20, 30])
   })
 })

@@ -90,3 +90,12 @@ export function computeLayout(
 
   return { canvasWidth, canvasHeight, cellW, cellH, draws }
 }
+
+// 将 from 位置的元素移到 to 位置，返回新数组，不修改原数组
+export function moveItem<T>(arr: readonly T[], from: number, to: number): T[] {
+  if (from === to) return [...arr]
+  const result = [...arr]
+  const [item] = result.splice(from, 1)
+  result.splice(to, 0, item)
+  return result
+}
