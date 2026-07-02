@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
+import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
@@ -107,11 +108,10 @@ ipcMain.handle('collage:save', async (_event, buffer: ArrayBuffer, suggestedName
     ],
   })
 
-  if (result.canceled || result.filePath.length === 0) {
+  if (result.canceled || !result.filePath) {
     return null
   }
 
-  const { writeFile } = await import('node:fs/promises')
   await writeFile(result.filePath, Buffer.from(buffer))
   return result.filePath
 })

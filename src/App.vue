@@ -4,6 +4,7 @@ import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
 import { FILE_NAME_CONFIG } from './shared/imageNameConfig'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
+import CollageDialog from './components/CollageDialog.vue'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
@@ -20,9 +21,27 @@ const steamCollections = ref<Collections>({})
 const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
+const isCollageDialogOpen = ref(false)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
+
+// 选中图片的 fileUrl（按选中顺序），供拼图组件加载
+const selectedImageUrls = computed(() => {
+  const selected = selectedPaths.value
+  const urls: string[] = []
+  for (const image of images.value) {
+    if (selected.has(image.absolutePath)) {
+      urls.push(image.fileUrl)
+    }
+  }
+  return urls
+})
+
+function openCollageDialog(): void {
+  if (selectedPaths.value.size === 0) return
+  isCollageDialogOpen.value = true
+}
 
 async function importSteamCollections(): Promise<void> {
   if (images.value.length === 0) {
@@ -589,6 +608,7 @@ async function selectDirectory(): Promise<void> {
         <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
           <span>已选 {{ selectedPaths.size }} 张</span>
           <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
+          <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
           <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
           <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
         </div>
@@ -699,6 +719,12 @@ async function selectDirectory(): Promise<void> {
         </div>
       </div>
     </div>
+
+    <CollageDialog
+      v-if="isCollageDialogOpen"
+      :urls="selectedImageUrls"
+      @close="isCollageDialogOpen = false"
+    />
 
     <div class="floating-controls">
       <button v-if="showBackToTop" class="round-button" type="button" title="向上滚动一屏" @click="scrollByScreen(-1)">
