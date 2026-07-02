@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
+import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
@@ -95,6 +96,24 @@ ipcMain.handle('collections:choose-export-directory', async () => {
 
 ipcMain.handle('collections:export-images', (_event, targetDirectory: string, absolutePaths: string[]) => {
   return exportImages(targetDirectory, absolutePaths)
+})
+
+ipcMain.handle('collage:save', async (_event, buffer: ArrayBuffer, suggestedName: string) => {
+  const result = await dialog.showSaveDialog({
+    title: '保存拼图',
+    defaultPath: suggestedName,
+    filters: [
+      { name: 'PNG', extensions: ['png'] },
+      { name: 'JPG', extensions: ['jpg', 'jpeg'] },
+    ],
+  })
+
+  if (result.canceled || !result.filePath) {
+    return null
+  }
+
+  await writeFile(result.filePath, Buffer.from(buffer))
+  return result.filePath
 })
 
 app.whenReady().then(() => {

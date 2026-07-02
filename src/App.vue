@@ -4,6 +4,7 @@ import { formatFileSize } from './shared/format'
 import type { ImageAsset } from './shared/imageLibrary'
 import { FILE_NAME_CONFIG } from './shared/imageNameConfig'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
+import CollageDialog from './components/CollageDialog.vue'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
@@ -20,9 +21,27 @@ const steamCollections = ref<Collections>({})
 const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
+const isCollageDialogOpen = ref(false)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
+
+// 选中图片的 fileUrl（按选中顺序），供拼图组件加载
+const selectedImageUrls = computed(() => {
+  const selected = selectedPaths.value
+  const urls: string[] = []
+  for (const image of images.value) {
+    if (selected.has(image.absolutePath)) {
+      urls.push(image.fileUrl)
+    }
+  }
+  return urls
+})
+
+function openCollageDialog(): void {
+  if (selectedPaths.value.size === 0) return
+  isCollageDialogOpen.value = true
+}
 
 async function importSteamCollections(): Promise<void> {
   if (images.value.length === 0) {
@@ -215,12 +234,25 @@ function groupDisplayLabel(groupName: string): string {
   return FILE_NAME_CONFIG[groupName] ?? groupName
 }
 
+// 当前收藏夹筛选范围内的图片（仅按收藏夹筛选，不按分类/搜索）
+const collectionScopedImages = computed(() => {
+  if (activeCollection.value === '全部') {
+    return images.value
+  }
+  const collectionPaths = new Set([
+    ...(collections.value[activeCollection.value] ?? []),
+    ...(steamCollections.value[activeCollection.value] ?? []),
+  ])
+  return images.value.filter((image) => collectionPaths.has(image.absolutePath))
+})
+
 const imageGroups = computed(() => {
+  const scoped = collectionScopedImages.value
   // 按显示标签分组，同名标签合并为一个 Tab
   const counts = new Map<string, { label: string; fileNames: string[] }>()
   const seenGroups = new Set<string>()
 
-  for (const image of images.value) {
+  for (const image of scoped) {
     if (seenGroups.has(image.groupName)) continue
     seenGroups.add(image.groupName)
     const label = groupDisplayLabel(image.groupName)
@@ -233,7 +265,7 @@ const imageGroups = computed(() => {
 
   // 统计每个 Tab 的实际图片数量
   const imageCounts = new Map<string, number>()
-  for (const image of images.value) {
+  for (const image of scoped) {
     const label = groupDisplayLabel(image.groupName)
     imageCounts.set(label, (imageCounts.get(label) ?? 0) + 1)
   }
@@ -241,7 +273,7 @@ const imageGroups = computed(() => {
   // 构建 Tab 列表，保留输入顺序
   const tabOrder = [
     ...new Set(
-      [...Object.values(FILE_NAME_CONFIG), ...images.value.map((img) => groupDisplayLabel(img.groupName))].filter(
+      [...Object.values(FILE_NAME_CONFIG), ...scoped.map((img) => groupDisplayLabel(img.groupName))].filter(
         (v, i, a) => a.indexOf(v) === i,
       ),
     ),
@@ -589,6 +621,7 @@ async function selectDirectory(): Promise<void> {
         <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
           <span>已选 {{ selectedPaths.size }} 张</span>
           <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
+          <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
           <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
           <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
         </div>
@@ -602,7 +635,7 @@ async function selectDirectory(): Promise<void> {
             :aria-selected="activeGroup === '全部'"
             @click="activeGroup = '全部'"
           >
-            全部 ({{ images.length }})
+            全部 ({{ collectionScopedImages.length }})
           </span>
           <span
             v-for="group in imageGroups"
@@ -699,6 +732,12 @@ async function selectDirectory(): Promise<void> {
         </div>
       </div>
     </div>
+
+    <CollageDialog
+      v-if="isCollageDialogOpen"
+      :urls="selectedImageUrls"
+      @close="isCollageDialogOpen = false"
+    />
 
     <div class="floating-controls">
       <button v-if="showBackToTop" class="round-button" type="button" title="向上滚动一屏" @click="scrollByScreen(-1)">

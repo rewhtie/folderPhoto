@@ -26,4 +26,7 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult> {
     return ipcRenderer.invoke('collections:export-images', targetDirectory, absolutePaths)
   },
+  saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null> {
+    return ipcRenderer.invoke('collage:save', buffer, suggestedName)
+  },
 })
