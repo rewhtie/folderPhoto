@@ -39,13 +39,14 @@ function registerImg(idx: number, el: unknown): void {
 
 // --- 拖拽 ---
 let dragFrom = -1
+const dragOverIdx = ref(-1)
 
 function onDragStart(idx: number, e: DragEvent): void {
   dragFrom = idx
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
   }
-  // 给被拖元素加半透明（通过 CSS :active 处理不了，这里用 class）
+  // 拖拽视觉反馈由 CSS :active 伪类处理（collage-thumb:active { opacity: 0.5 }）
 }
 
 function onDragOver(idx: number, e: DragEvent): void {
@@ -53,6 +54,7 @@ function onDragOver(idx: number, e: DragEvent): void {
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = 'move'
   }
+  dragOverIdx.value = idx
 }
 
 function onDrop(idx: number, e: DragEvent): void {
@@ -64,6 +66,7 @@ function onDrop(idx: number, e: DragEvent): void {
 
 function onDragEnd(): void {
   dragFrom = -1
+  dragOverIdx.value = -1
 }
 
 // --- 导出用 draw ---
@@ -174,8 +177,10 @@ async function exportCollage(): Promise<void> {
           crossOrigin="anonymous"
           draggable="true"
           class="collage-thumb"
+          :class="{ 'collage-thumb-dragover': dragOverIdx === idx }"
           @dragstart="onDragStart(idx, $event)"
           @dragover="onDragOver(idx, $event)"
+          @dragleave="dragOverIdx = -1"
           @drop="onDrop(idx, $event)"
           @dragend="onDragEnd"
         />
@@ -273,6 +278,10 @@ async function exportCollage(): Promise<void> {
 .collage-thumb:active {
   cursor: grabbing;
   opacity: 0.5;
+}
+.collage-thumb-dragover {
+  border-color: #7dd3fc;
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.5);
 }
 .collage-error {
   color: #fca5a5;

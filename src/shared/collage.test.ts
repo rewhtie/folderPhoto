@@ -141,6 +141,11 @@ describe('moveItem', () => {
     expect(moveItem([10], 0, 0)).toEqual([10])
   })
 
+  it('returns a copy unchanged when indices are out of bounds', () => {
+    expect(moveItem([10, 20, 30], -1, 1)).toEqual([10, 20, 30])
+    expect(moveItem([10, 20, 30], 0, 5)).toEqual([10, 20, 30])
+  })
+
   it('does not mutate the original array', () => {
     const arr = [10, 20, 30]
     moveItem(arr, 0, 2)
