@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { computeLayout, type CollageImage } from '../shared/collage'
+import { computed, onMounted, ref } from 'vue'
+import { computeLayout, moveItem, type CollageImage } from '../shared/collage'
 
 const props = defineProps<{ urls: string[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -16,7 +16,9 @@ const isExporting = ref(false)
 const errorMessage = ref('')
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
-const loadedImages = ref<Map<number, HTMLImageElement>>(new Map())
+const orderedIndices = ref<number[]>([])
+// 非响应式，纯导出用：按原始下标存 <img> 元素引用
+const imgRefMap = new Map<number, HTMLImageElement>()
 
 const defaultRows = computed(() => Math.max(1, Math.ceil(Math.sqrt(n.value))))
 const defaultCols = computed(() => Math.max(1, Math.ceil(n.value / defaultRows.value)))
@@ -24,37 +26,58 @@ const defaultCols = computed(() => Math.max(1, Math.ceil(n.value / defaultRows.v
 onMounted(() => {
   rows.value = defaultRows.value
   cols.value = defaultCols.value
-  void loadImages()
+  orderedIndices.value = Array.from({ length: n.value }, (_, i) => i)
 })
 
-async function loadImages(): Promise<void> {
-  const map = new Map<number, HTMLImageElement>()
-  await Promise.all(
-    props.urls.map((url, index) => {
-      return new Promise<void>((resolve) => {
-        const img = new Image()
-        img.onload = () => {
-          map.set(index, img)
-          resolve()
-        }
-        img.onerror = () => resolve() // 单张失败跳过
-        img.src = url
-      })
-    }),
-  )
-  loadedImages.value = map
-  draw()
+function registerImg(idx: number, el: unknown): void {
+  if (el instanceof HTMLImageElement) {
+    imgRefMap.set(idx, el)
+  } else {
+    imgRefMap.delete(idx)
+  }
 }
 
+// --- 拖拽 ---
+let dragFrom = -1
+const dragOverIdx = ref(-1)
+
+function onDragStart(idx: number, e: DragEvent): void {
+  dragFrom = idx
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  // 拖拽视觉反馈由 CSS :active 伪类处理（collage-thumb:active { opacity: 0.5 }）
+}
+
+function onDragOver(idx: number, e: DragEvent): void {
+  e.preventDefault() // 允许 drop
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+  dragOverIdx.value = idx
+}
+
+function onDrop(idx: number, e: DragEvent): void {
+  e.preventDefault()
+  if (dragFrom === -1 || dragFrom === idx) return
+  orderedIndices.value = moveItem(orderedIndices.value, dragFrom, idx)
+  dragFrom = -1
+}
+
+function onDragEnd(): void {
+  dragFrom = -1
+  dragOverIdx.value = -1
+}
+
+// --- 导出用 draw ---
 function draw(): void {
   const canvas = canvasRef.value
   if (!canvas) return
-  // 按 urls 顺序取已加载图片；未加载的过滤掉
   const filtered: HTMLImageElement[] = []
   const imgs: CollageImage[] = []
-  for (let i = 0; i < props.urls.length; i++) {
-    const img = loadedImages.value.get(i)
-    if (img) {
+  for (const idx of orderedIndices.value) {
+    const img = imgRefMap.get(idx)
+    if (img && img.complete && img.naturalWidth > 0) {
       filtered.push(img)
       imgs.push({ width: img.naturalWidth, height: img.naturalHeight })
     }
@@ -84,6 +107,7 @@ async function exportCollage(): Promise<void> {
   isExporting.value = true
   errorMessage.value = ''
   try {
+    draw()
     const mime = format.value === 'png' ? 'image/png' : 'image/jpeg'
     const quality = format.value === 'png' ? undefined : jpgQuality.value
     const blob = await new Promise<Blob | null>((resolve) =>
@@ -91,28 +115,28 @@ async function exportCollage(): Promise<void> {
     )
     if (!blob) {
       errorMessage.value = '导出失败'
+      console.error('[collage] toBlob 返回 null（可能 canvas 被跨源图片污染）')
       return
     }
     const buffer = await blob.arrayBuffer()
     const ext = format.value === 'png' ? 'png' : 'jpg'
     const saved = await window.imageLibrary.saveCollage(buffer, `collage.${ext}`)
-    if (saved === null) return // 用户取消
+    if (saved === null) return
     emit('close')
-  } catch {
+  } catch (err) {
+    console.error('[collage] 导出失败:', err)
     errorMessage.value = '导出失败'
   } finally {
     isExporting.value = false
   }
 }
-
-watch([rows, cols, totalWidth], () => draw())
 </script>
 
 <template>
   <div class="collage-backdrop" @click.self="emit('close')">
     <div class="collage-dialog">
       <h3>拼图</h3>
-      <p>已选 {{ n }} 张图片</p>
+      <p>已选 {{ n }} 张图片（拖拽可调整位置）</p>
 
       <div class="collage-fields">
         <label>
@@ -141,9 +165,29 @@ watch([rows, cols, totalWidth], () => draw())
         </label>
       </div>
 
-      <div class="collage-preview">
-        <canvas ref="canvasRef"></canvas>
+      <div
+        class="collage-grid"
+        :style="{ gridTemplateColumns: `repeat(${cols}, 1fr)` }"
+      >
+        <img
+          v-for="idx in orderedIndices"
+          :key="idx"
+          :ref="(el) => registerImg(idx, el)"
+          :src="urls[idx]"
+          crossOrigin="anonymous"
+          draggable="true"
+          class="collage-thumb"
+          :class="{ 'collage-thumb-dragover': dragOverIdx === idx }"
+          @dragstart="onDragStart(idx, $event)"
+          @dragover="onDragOver(idx, $event)"
+          @dragleave="dragOverIdx = -1"
+          @drop="onDrop(idx, $event)"
+          @dragend="onDragEnd"
+        />
       </div>
+
+      <!-- 隐藏 canvas，仅供导出 -->
+      <canvas ref="canvasRef" style="display: none"></canvas>
 
       <p v-if="errorMessage" class="collage-error">{{ errorMessage }}</p>
 
@@ -208,18 +252,36 @@ watch([rows, cols, totalWidth], () => draw())
   color: #e2e8f0;
   font-size: 14px;
 }
-.collage-preview {
-  display: flex;
-  justify-content: center;
+.collage-grid {
+  display: grid;
+  gap: 4px;
   margin-bottom: 18px;
   max-height: 50vh;
-}
-.collage-preview canvas {
-  max-width: 100%;
-  max-height: 50vh;
+  overflow-y: auto;
+  padding: 4px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 8px;
   background: #0f172a;
+}
+.collage-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: grab;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.collage-thumb:hover {
+  border-color: rgba(125, 211, 252, 0.4);
+}
+.collage-thumb:active {
+  cursor: grabbing;
+  opacity: 0.5;
+}
+.collage-thumb-dragover {
+  border-color: #7dd3fc;
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.5);
 }
 .collage-error {
   color: #fca5a5;
