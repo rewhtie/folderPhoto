@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.steampc.imagebrowser",
     "productName": "SteamImageBrowser",
+    "icon": "build/icon.svg",
     "directories": {
       "output": "release"
     },
