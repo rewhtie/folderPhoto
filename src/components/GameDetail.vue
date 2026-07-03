@@ -22,6 +22,7 @@ interface Achievement {
   name: string
   description: string
   iconUrl: string
+  iconGrayUrl: string
   achieved: boolean
   unlockTime: number | null
 }
@@ -29,18 +30,23 @@ const achievements = ref<Achievement[]>([])
 const achievementSource = ref<'local' | 'api' | null>(null)
 const achievementError = ref('')
 const isLoadingAchievements = ref(false)
+const isCachingIcons = ref(false)
+const cacheMessage = ref('')
 
 async function loadAchievements(): Promise<void> {
   if (isLoadingAchievements.value) return
   isLoadingAchievements.value = true
   achievementError.value = ''
   achievements.value = []
+  cacheMessage.value = ''
   try {
     // 优先尝试 Web API（若已配置）
     const result = await window.imageLibrary.fetchApiAchievements(props.appId)
     if (!result.error && result.achievements.length > 0) {
       achievementSource.value = result.source
       achievements.value = result.achievements
+      // 后台缓存图标
+      void cacheIcons(result.achievements)
       return
     }
     // API 未配置或失败 → 退回本地
@@ -60,11 +66,36 @@ async function loadAchievements(): Promise<void> {
     }
     achievementSource.value = result.source
     achievements.value = result.achievements
+    void cacheIcons(result.achievements)
   } catch (err) {
     achievementError.value = err instanceof Error ? err.message : '加载失败'
   } finally {
     isLoadingAchievements.value = false
   }
+}
+
+async function cacheIcons(list: Achievement[]): Promise<void> {
+  const icons = list
+    .filter((a) => a.iconUrl || a.iconGrayUrl)
+    .map((a) => ({ id: a.id, iconUrl: a.iconUrl, iconGrayUrl: a.iconGrayUrl }))
+  if (icons.length === 0) return
+  isCachingIcons.value = true
+  try {
+    const r = await window.imageLibrary.cacheAchievementIcons(props.appId, props.appName, icons)
+    const parts: string[] = []
+    if (r.cached > 0) parts.push(`已缓存 ${r.cached} 张`)
+    if (r.skipped > 0) parts.push(`${r.skipped} 张已存在`)
+    if (r.failed > 0) parts.push(`${r.failed} 张失败`)
+    cacheMessage.value = parts.length > 0 ? parts.join('，') : '所有图标已缓存'
+  } catch {
+    cacheMessage.value = '缓存失败'
+  } finally {
+    isCachingIcons.value = false
+  }
+}
+
+function openCacheDir(): void {
+  void window.imageLibrary.openAchievementCacheDir(props.appId, props.appName)
 }
 
 const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved).length)
@@ -103,8 +134,12 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
             <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
           </div>
           <div class="image-meta">
-            <strong :title="image.name">{{ image.name }}</strong>
-            <span class="meta-sub">{{ formatFileSize(image.sizeBytes) }}</span>
+            <strong :title="image.appName || image.name">
+              {{ image.appName || image.name }}
+            </strong>
+            <span class="meta-sub">
+              <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+            </span>
           </div>
         </article>
       </div>
@@ -119,6 +154,16 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
         <span v-if="achievements.length > 0" class="achievement-summary">
           {{ unlockedCount }} / {{ achievements.length }} 解锁
         </span>
+        <button
+          v-if="achievements.length > 0 && achievementSource === 'api'"
+          class="secondary-button open-dir-btn"
+          type="button"
+          @click="openCacheDir"
+        >
+          📂 打开缓存目录
+        </button>
+        <span v-if="isCachingIcons" class="cache-msg">缓存图标中…</span>
+        <span v-else-if="cacheMessage" class="cache-msg">{{ cacheMessage }}</span>
       </div>
 
       <p v-if="achievementError" class="achievement-error">{{ achievementError }}</p>
@@ -131,8 +176,8 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
           :class="{ 'achievement-locked': !a.achieved }"
         >
           <img
-            v-if="a.iconUrl"
-            :src="a.iconUrl"
+            v-if="a.achieved ? a.iconUrl : (a.iconGrayUrl || a.iconUrl)"
+            :src="a.achieved ? a.iconUrl : (a.iconGrayUrl || a.iconUrl)"
             :alt="a.name || a.id"
             loading="lazy"
           />
@@ -209,30 +254,56 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   background: rgba(15, 23, 42, 0.74);
 }
 .preview-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
   cursor: pointer;
+  background: rgba(2, 6, 23, 0.76);
 }
 .preview-frame img {
-  display: block;
-  width: 100%;
-  height: 140px;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 .select-checkbox {
   position: absolute;
   top: 8px;
-  left: 8px;
-  z-index: 1;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.7);
+  cursor: pointer;
+}
+.select-checkbox input {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+.selected-card {
+  outline: 2px solid #7dd3fc;
 }
 .image-meta {
-  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
 }
 .image-meta strong {
-  display: block;
   overflow: hidden;
+  color: #f8fafc;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .meta-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   color: #94a3b8;
   font-size: 12px;
 }
@@ -251,6 +322,15 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   font-size: 14px;
   margin: 0 0 16px;
 }
+.open-dir-btn {
+  margin-left: auto;
+  font-size: 13px;
+  padding: 6px 14px;
+}
+.cache-msg {
+  color: #94a3b8;
+  font-size: 12px;
+}
 .achievement-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -258,8 +338,9 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 }
 .achievement-card {
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.6);
@@ -284,8 +365,11 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 .achievement-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  padding-left: 15px;
+  flex: 1;
+  justify-content: center;
 }
 .achievement-info strong {
   font-size: 14px;

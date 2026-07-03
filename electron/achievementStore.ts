@@ -7,6 +7,7 @@ export interface Achievement {
   name: string // 显示名（本地没有则为空）
   description: string // 描述（本地没有则为空）
   iconUrl: string // 图标 URL（本地没有则为空）
+  iconGrayUrl: string // 灰色图标 URL（未解锁时使用）
   achieved: boolean // 是否解锁
   unlockTime: number | null // 解锁时间戳（秒），无则 null
 }
@@ -79,6 +80,7 @@ function extractFromLocalStats(parsed: unknown): Achievement[] {
       name: '',
       description: '',
       iconUrl: '',
+      iconGrayUrl: '',
       achieved,
       unlockTime,
     })
@@ -87,34 +89,86 @@ function extractFromLocalStats(parsed: unknown): Achievement[] {
 }
 
 // 调 Steam Web API：ISteamUserStats/GetPlayerAchievements/v1/
+// 该接口不返回图标，需要额外调 GetSchemaForGame 获取图标后合并
 export async function fetchApiAchievements(
   appId: string,
   apiKey: string,
   steamId: string,
 ): Promise<AchievementResult> {
-  const url = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appId)}&l=schinese`
+  // 并行请求玩家成就 + 游戏 Schema（含图标）
+  const [playerResult, schemaMap] = await Promise.all([
+    fetchPlayerAchievements(appId, apiKey, steamId),
+    fetchAchievementSchema(appId, apiKey),
+  ])
 
+  const achievements: Achievement[] = playerResult.map((a) => {
+    const schema = schemaMap.get(a.apiname ?? '')
+    return {
+      id: a.apiname ?? '',
+      // Schema 的 name 和 description 是英文，API 的是本地化；API 优先，为空再用 schema
+      name: a.name ?? schema?.name ?? '',
+      description: a.description ?? schema?.description ?? '',
+      // 图标来自 schema；API 返回的 icon 字段通常为空
+      iconUrl: a.icon || schema?.icon || '',
+      iconGrayUrl: schema?.iconGray || '',
+      achieved: a.achieved === 1,
+      unlockTime: typeof a.unlocktime === 'number' && a.unlocktime > 0 ? a.unlocktime : null,
+    }
+  })
+
+  return { source: 'api', achievements }
+}
+
+// 调 GetPlayerAchievements 拿解锁状态 + 本地化名称
+async function fetchPlayerAchievements(
+  appId: string,
+  apiKey: string,
+  steamId: string,
+): Promise<ApiAchievement[]> {
+  const url = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appId)}&l=schinese`
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Steam API 请求失败：HTTP ${response.status}`)
   }
-
   const data = (await response.json()) as ApiResponse
   const playerStats = data?.playerstats
   if (!playerStats || playerStats.success !== true) {
     throw new Error(playerStats?.error || 'Steam API 返回失败')
   }
+  return playerStats.achievements ?? []
+}
 
-  const achievements: Achievement[] = (playerStats.achievements ?? []).map((a) => ({
-    id: a.apiname ?? '',
-    name: a.name ?? '',
-    description: a.description ?? '',
-    iconUrl: a.icon ?? '',
-    achieved: a.achieved === 1,
-    unlockTime: typeof a.unlocktime === 'number' && a.unlocktime > 0 ? a.unlocktime : null,
-  }))
+// 调 GetSchemaForGame 拿成就图标和英文名称/描述
+async function fetchAchievementSchema(appId: string, apiKey: string): Promise<Map<string, SchemaAchievement>> {
+  const url = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=${encodeURIComponent(apiKey)}&appid=${encodeURIComponent(appId)}`
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return new Map()
+    const data = (await response.json()) as SchemaResponse
+    const list = data?.game?.availableGameStats?.achievements ?? []
+    const map = new Map<string, SchemaAchievement>()
+    for (const a of list) {
+      if (a.name) map.set(a.name, a)
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
 
-  return { source: 'api', achievements }
+interface SchemaAchievement {
+  name: string
+  description?: string
+  icon?: string
+  iconGray?: string
+}
+
+interface SchemaResponse {
+  game?: {
+    availableGameStats?: {
+      achievements?: SchemaAchievement[]
+    }
+  }
 }
 
 interface ApiAchievement {
@@ -122,7 +176,7 @@ interface ApiAchievement {
   achieved: number
   name?: string
   description?: string
-  icon?: string // 未解锁图标
+  icon?: string // GetPlayerAchievements 通常返回空
   icongray?: string
   unlocktime: number
 }

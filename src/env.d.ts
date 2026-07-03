@@ -25,6 +25,7 @@ interface Achievement {
   name: string
   description: string
   iconUrl: string
+  iconGrayUrl: string
   achieved: boolean
   unlockTime: number | null
 }
@@ -32,6 +33,13 @@ interface Achievement {
 interface AchievementResult {
   source: 'local' | 'api'
   achievements: Achievement[]
+}
+
+interface CacheIconsResult {
+  cached: number
+  skipped: number
+  failed: number
+  directory: string
 }
 
 declare global {
@@ -49,6 +57,8 @@ declare global {
       saveSettings(settings: SteamSettings): Promise<void>
       loadLocalAchievements(librarycacheDir: string, appId: string): Promise<AchievementResult>
       fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>
+      cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
+      openAchievementCacheDir(appId: string, gameName: string): Promise<void>
     }
   }
 }

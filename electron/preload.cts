@@ -5,6 +5,7 @@ import type { ExportResult } from './imageExporter.js'
 import type { SteamCollection } from './steamCollections.js'
 import type { SteamSettings } from './settingsStore.js'
 import type { AchievementResult } from './achievementStore.js'
+import type { CacheIconsResult } from './achievementCache.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
   scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
@@ -42,5 +43,11 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   },
   fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }> {
     return ipcRenderer.invoke('achievements:fetch-api', appId)
+  },
+  cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult> {
+    return ipcRenderer.invoke('achievements:cache-icons', appId, gameName, icons)
+  },
+  openAchievementCacheDir(appId: string, gameName: string): Promise<void> {
+    return ipcRenderer.invoke('achievements:open-cache-dir', appId, gameName)
   },
 })

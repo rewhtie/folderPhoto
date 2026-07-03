@@ -560,7 +560,7 @@ async function selectDirectory(): Promise<void> {
         @back="closeDetail"
       />
 
-      <template v-else>
+      <div v-show="!detailGame">
       <div v-if="errorMessage" class="state-card error-state">
         {{ errorMessage }}
       </div>
@@ -656,14 +656,6 @@ async function selectDirectory(): Promise<void> {
           </span>
         </div>
 
-        <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
-          <span>已选 {{ selectedPaths.size }} 张</span>
-          <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
-          <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
-          <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
-          <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
-        </div>
-
         <div class="collection-bar" role="tablist" aria-label="按文件名筛选">
           <span class="collection-label">分类：</span>
           <span
@@ -721,7 +713,7 @@ async function selectDirectory(): Promise<void> {
                   title="查看详情与成就"
                   @click.stop="openDetail(image.appId, image.appName || image.appId)"
                 >
-                  👁
+                  👁️
                 </button>
               </span>
               <button
@@ -737,10 +729,18 @@ async function selectDirectory(): Promise<void> {
         </div>
       </template>
 
-      <div v-else class="state-card muted-state">
-        选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击“扫描”。
+      <div v-else class=”state-card muted-state”>
+        选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击”扫描”。
       </div>
-      </template>
+      </div>
+
+      <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
+        <span>已选 {{ selectedPaths.size }} 张</span>
+        <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
+        <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
+        <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
+        <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
+      </div>
     </section>
 
     <div v-if="isCollectionDialogOpen" class="dialog-backdrop" @click.self="cancelCollectionDialog">

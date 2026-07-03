@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -7,6 +7,7 @@ import { imageSourceUrlToFileUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
 import { loadSettings, saveSettings, setSettingsFilePath } from './settingsStore.js'
 import { fetchApiAchievements, loadLocalAchievements } from './achievementStore.js'
+import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
 import type { Collections } from '../src/shared/collections.js'
@@ -20,6 +21,7 @@ const packagedDirectory = process.env.PORTABLE_EXECUTABLE_DIR ?? dirname(app.get
 const collectionsDirectory = app.isPackaged ? packagedDirectory : join(__dirname, '..', '..')
 setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
 setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
+setAchievementsBaseDir(collectionsDirectory)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -148,6 +150,15 @@ ipcMain.handle('achievements:fetch-api', async (_event, appId: string) => {
       error: err instanceof Error ? err.message : '请求失败',
     }
   }
+})
+
+ipcMain.handle('achievements:cache-icons', async (_event, appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>) => {
+  return cacheAchievementIcons(appId, gameName, icons)
+})
+
+ipcMain.handle('achievements:open-cache-dir', async (_event, appId: string, gameName: string) => {
+  const dir = getAchievementCacheDir(appId, gameName)
+  await shell.openPath(dir)
 })
 
 app.whenReady().then(() => {
