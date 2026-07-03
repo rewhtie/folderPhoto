@@ -65,6 +65,7 @@ function createWindow(): void {
   }
 
   void mainWindow.loadFile(join(__dirname, '../dist/index.html'))
+  mainWindow.webContents.openDevTools({ mode: 'detach' })
 }
 
 ipcMain.handle('image-library:scan-images', (_event, directoryPath: string, options: { includeDlc?: boolean }) => {
@@ -155,8 +156,10 @@ ipcMain.handle('achievements:fetch-api', async (_event, appId: string) => {
   }
   try {
     const result = await fetchApiAchievements(appId, settings.apiKey, settings.steamId)
-    // 写入缓存（异步，不阻塞返回）
-    void saveAchievementCache(appId, result)
+    // 只缓存成功结果（有成就数据的），错误不缓存
+    if (result.achievements.length > 0) {
+      await saveAchievementCache(appId, result)
+    }
     return result
   } catch (err) {
     return {
