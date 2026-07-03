@@ -1,5 +1,31 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+
+let cacheBaseDir = ''
+
+export function setAchievementCacheBaseDir(dir: string): void {
+  cacheBaseDir = join(dir, 'achievements')
+}
+
+export async function loadCachedAchievements(appId: string): Promise<AchievementResult | null> {
+  if (!cacheBaseDir) return null
+  const filePath = join(cacheBaseDir, `${appId}.json`)
+  try {
+    const raw = await readFile(filePath, 'utf-8')
+    const parsed = JSON.parse(raw) as AchievementResult
+    if (parsed && Array.isArray(parsed.achievements)) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+export async function saveAchievementCache(appId: string, result: AchievementResult): Promise<void> {
+  if (!cacheBaseDir) return
+  await mkdir(cacheBaseDir, { recursive: true })
+  const filePath = join(cacheBaseDir, `${appId}.json`)
+  await writeFile(filePath, JSON.stringify(result, null, 2), 'utf-8')
+}
 
 // 成就统一结构（无论本地还是 API 来源）
 export interface Achievement {
