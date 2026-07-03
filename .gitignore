@@ -5,6 +5,7 @@ dist-electron/
 .vite/
 *.log
 .DS_Store
+settings.json
 collections.json
 app-names.json
 release/
