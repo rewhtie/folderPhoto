@@ -6,7 +6,13 @@ import { scanImages } from './imageScanner.js'
 import { imageSourceUrlToFileUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
 import { loadSettings, saveSettings, setSettingsFilePath } from './settingsStore.js'
-import { fetchApiAchievements, loadLocalAchievements } from './achievementStore.js'
+import {
+  fetchApiAchievements,
+  loadLocalAchievements,
+  setAchievementCacheBaseDir,
+  loadCachedAchievements,
+  saveAchievementCache,
+} from './achievementStore.js'
 import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
@@ -22,6 +28,7 @@ const collectionsDirectory = app.isPackaged ? packagedDirectory : join(__dirname
 setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
 setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
 setAchievementsBaseDir(collectionsDirectory)
+setAchievementCacheBaseDir(collectionsDirectory)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -137,12 +144,20 @@ ipcMain.handle('achievements:load-local', (_event, librarycacheDir: string, appI
 })
 
 ipcMain.handle('achievements:fetch-api', async (_event, appId: string) => {
+  // 先查缓存
+  const cached = await loadCachedAchievements(appId)
+  if (cached) return cached
+
+  // 缓存未命中，走 API
   const settings = await loadSettings()
   if (!settings.apiKey || !settings.steamId) {
     return { source: 'api' as const, achievements: [], error: '未配置 Web API' }
   }
   try {
-    return await fetchApiAchievements(appId, settings.apiKey, settings.steamId)
+    const result = await fetchApiAchievements(appId, settings.apiKey, settings.steamId)
+    // 写入缓存（异步，不阻塞返回）
+    void saveAchievementCache(appId, result)
+    return result
   } catch (err) {
     return {
       source: 'api' as const,
