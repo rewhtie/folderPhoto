@@ -707,21 +707,23 @@ async function selectDirectory(): Promise<void> {
             </label>
             <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
               <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
-              <button
-                v-if="image.appId"
-                class="detail-button"
-                type="button"
-                title="查看游戏详情与成就"
-                @click.stop="openDetail(image.appId, image.appName || image.appId)"
-              >
-                👁
-              </button>
             </div>
             <div class="image-meta">
               <strong :title="image.appName || image.relativePath">
                 {{ image.appName || image.relativePath }}
               </strong>
-              <span class="meta-sub">{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+              <span class="meta-sub">
+                <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+                <button
+                  v-if="image.appId"
+                  class="detail-link"
+                  type="button"
+                  title="查看详情与成就"
+                  @click.stop="openDetail(image.appId, image.appName || image.appId)"
+                >
+                  👁
+                </button>
+              </span>
               <button
                 v-if="activeCollection !== '全部'"
                 class="ghost-button remove-button"
@@ -1266,26 +1268,6 @@ button:disabled {
   background: rgba(15, 23, 42, 0.74);
 }
 
-.detail-button {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #fff;
-  font-size: 28px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
-}
-.image-card:hover .detail-button {
-  opacity: 1;
-}
-
 .icon-button {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1305,7 +1287,6 @@ button:disabled {
 }
 
 .preview-frame {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1336,6 +1317,29 @@ button:disabled {
 .image-meta span {
   color: #94a3b8;
   font-size: 13px;
+}
+
+.meta-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.detail-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
+}
+.detail-link:hover {
+  opacity: 1;
+  color: #7dd3fc;
 }
 
 .dlc-toggle {
