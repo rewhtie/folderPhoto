@@ -705,17 +705,17 @@ async function selectDirectory(): Promise<void> {
                 @change="toggleSelected(image.absolutePath)"
               />
             </label>
-            <button
-              v-if="image.appId"
-              class="detail-button"
-              type="button"
-              title="查看游戏详情与成就"
-              @click.stop="openDetail(image.appId, image.appName || image.appId)"
-            >
-              详情
-            </button>
             <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
               <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
+              <button
+                v-if="image.appId"
+                class="detail-button"
+                type="button"
+                title="查看游戏详情与成就"
+                @click.stop="openDetail(image.appId, image.appName || image.appId)"
+              >
+                详情
+              </button>
             </div>
             <div class="image-meta">
               <strong :title="image.appName || image.relativePath">
@@ -909,7 +909,7 @@ input:focus {
 }
 
 button {
-  padding: 0 22px;
+  padding: 11px 22px;
   border: 0;
   border-radius: 14px;
   color: #082f49;
@@ -1298,7 +1298,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   width: 44px;
-  padding: 0;
+  padding: 9px 15px;
   border-radius: 14px;
   background: rgba(59, 130, 246, 0.22);
   border: 1px solid rgba(147, 197, 253, 0.34);
@@ -1312,6 +1312,7 @@ button:disabled {
 }
 
 .preview-frame {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
