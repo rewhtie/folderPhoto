@@ -714,7 +714,7 @@ async function selectDirectory(): Promise<void> {
                 title="查看游戏详情与成就"
                 @click.stop="openDetail(image.appId, image.appName || image.appId)"
               >
-                详情
+                👁
               </button>
             </div>
             <div class="image-meta">
