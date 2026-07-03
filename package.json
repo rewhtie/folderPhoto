@@ -2,6 +2,8 @@
   "name": "steam-pc-local-image-browser",
   "version": "0.1.0",
   "private": true,
+  "description": "Steam 本地图片浏览器 — 浏览、收藏、拼图 Steam 游戏图片",
+  "author": "linmingqi",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -33,16 +35,16 @@
     }
   },
   "dependencies": {
-    "@vitejs/plugin-vue": "latest",
-    "electron": "latest",
     "vue": "latest"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "latest",
     "@types/node": "latest",
     "@unocss/preset-uno": "^66.7.4",
     "@vue/tsconfig": "latest",
     "concurrently": "latest",
     "cross-env": "latest",
+    "electron": "latest",
     "electron-builder": "latest",
     "typescript": "latest",
     "unocss": "^66.7.4",
