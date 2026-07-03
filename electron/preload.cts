@@ -38,9 +38,6 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   saveSettings(settings: SteamSettings): Promise<void> {
     return ipcRenderer.invoke('settings:save', settings)
   },
-  loadLocalAchievements(librarycacheDir: string, appId: string): Promise<AchievementResult> {
-    return ipcRenderer.invoke('achievements:load-local', librarycacheDir, appId)
-  },
   fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }> {
     return ipcRenderer.invoke('achievements:fetch-api', appId)
   },

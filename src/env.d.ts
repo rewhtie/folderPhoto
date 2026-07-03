@@ -55,7 +55,6 @@ declare global {
       saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
       loadSettings(): Promise<SteamSettings>
       saveSettings(settings: SteamSettings): Promise<void>
-      loadLocalAchievements(librarycacheDir: string, appId: string): Promise<AchievementResult>
       fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>
       cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
       openAchievementCacheDir(appId: string, gameName: string): Promise<void>
