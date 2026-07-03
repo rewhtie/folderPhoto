@@ -1272,24 +1272,18 @@ button:disabled {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 2;
-  padding: 8px 18px;
-  border: 1px solid rgba(125, 211, 252, 0.5);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.92);
-  color: #e2e8f0;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 28px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
 }
 .image-card:hover .detail-button {
   opacity: 1;
-}
-.detail-button:hover {
-  border-color: #7dd3fc;
-  color: #7dd3fc;
-  background: rgba(15, 23, 42, 1);
 }
 
 .icon-button {
@@ -1307,7 +1301,6 @@ button:disabled {
   cursor: pointer;
 }
 .icon-button:hover {
-  border-color: #7dd3fc;
   color: #7dd3fc;
 }
 
