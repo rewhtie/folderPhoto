@@ -15,6 +15,33 @@ interface SteamCollection {
   appIds: string[]
 }
 
+interface SteamSettings {
+  apiKey: string
+  steamId: string
+}
+
+interface Achievement {
+  id: string
+  name: string
+  description: string
+  iconUrl: string
+  iconGrayUrl: string
+  achieved: boolean
+  unlockTime: number | null
+}
+
+interface AchievementResult {
+  source: 'local' | 'api'
+  achievements: Achievement[]
+}
+
+interface CacheIconsResult {
+  cached: number
+  skipped: number
+  failed: number
+  directory: string
+}
+
 declare global {
   interface Window {
     imageLibrary: {
@@ -26,6 +53,12 @@ declare global {
       chooseExportDirectory(): Promise<string | null>
       exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult>
       saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
+      loadSettings(): Promise<SteamSettings>
+      saveSettings(settings: SteamSettings): Promise<void>
+      loadLocalAchievements(librarycacheDir: string, appId: string): Promise<AchievementResult>
+      fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>
+      cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
+      openAchievementCacheDir(appId: string, gameName: string): Promise<void>
     }
   }
 }

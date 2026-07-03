@@ -1,13 +1,17 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
 import { imageSourceUrlToFileUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
+import { loadSettings, saveSettings, setSettingsFilePath } from './settingsStore.js'
+import { fetchApiAchievements, loadLocalAchievements } from './achievementStore.js'
+import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
 import type { Collections } from '../src/shared/collections.js'
+import type { SteamSettings } from './settingsStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -16,6 +20,8 @@ const __dirname = dirname(__filename)
 const packagedDirectory = process.env.PORTABLE_EXECUTABLE_DIR ?? dirname(app.getPath('exe'))
 const collectionsDirectory = app.isPackaged ? packagedDirectory : join(__dirname, '..', '..')
 setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
+setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
+setAchievementsBaseDir(collectionsDirectory)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -24,6 +30,8 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      // 拼图导出需要 canvas.toBlob：跨源图片必须走 CORS 才不会污染画布
+      corsEnabled: true,
     },
   },
 ])
@@ -116,8 +124,55 @@ ipcMain.handle('collage:save', async (_event, buffer: ArrayBuffer, suggestedName
   return result.filePath
 })
 
+ipcMain.handle('settings:load', () => {
+  return loadSettings()
+})
+
+ipcMain.handle('settings:save', (_event, settings: SteamSettings) => {
+  return saveSettings(settings)
+})
+
+ipcMain.handle('achievements:load-local', (_event, librarycacheDir: string, appId: string) => {
+  return loadLocalAchievements(librarycacheDir, appId)
+})
+
+ipcMain.handle('achievements:fetch-api', async (_event, appId: string) => {
+  const settings = await loadSettings()
+  if (!settings.apiKey || !settings.steamId) {
+    return { source: 'api' as const, achievements: [], error: '未配置 Web API' }
+  }
+  try {
+    return await fetchApiAchievements(appId, settings.apiKey, settings.steamId)
+  } catch (err) {
+    return {
+      source: 'api' as const,
+      achievements: [],
+      error: err instanceof Error ? err.message : '请求失败',
+    }
+  }
+})
+
+ipcMain.handle('achievements:cache-icons', async (_event, appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>) => {
+  return cacheAchievementIcons(appId, gameName, icons)
+})
+
+ipcMain.handle('achievements:open-cache-dir', async (_event, appId: string, gameName: string) => {
+  const dir = getAchievementCacheDir(appId, gameName)
+  await shell.openPath(dir)
+})
+
 app.whenReady().then(() => {
-  protocol.handle('local-image', (request) => net.fetch(imageSourceUrlToFileUrl(request.url)))
+  protocol.handle('local-image', async (request) => {
+    const response = await net.fetch(imageSourceUrlToFileUrl(request.url))
+    // 显式带上 CORS 头，配合 img.crossOrigin='anonymous' 让 canvas 不被污染
+    const headers = new Headers(response.headers)
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  })
 
   createWindow()
 

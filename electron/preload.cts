@@ -3,6 +3,9 @@ import type { ScanImagesResult, SelectDirectoryResult } from '../src/shared/imag
 import type { Collections } from '../src/shared/collections.js'
 import type { ExportResult } from './imageExporter.js'
 import type { SteamCollection } from './steamCollections.js'
+import type { SteamSettings } from './settingsStore.js'
+import type { AchievementResult } from './achievementStore.js'
+import type { CacheIconsResult } from './achievementCache.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
   scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
@@ -28,5 +31,23 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   },
   saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null> {
     return ipcRenderer.invoke('collage:save', buffer, suggestedName)
+  },
+  loadSettings(): Promise<SteamSettings> {
+    return ipcRenderer.invoke('settings:load')
+  },
+  saveSettings(settings: SteamSettings): Promise<void> {
+    return ipcRenderer.invoke('settings:save', settings)
+  },
+  loadLocalAchievements(librarycacheDir: string, appId: string): Promise<AchievementResult> {
+    return ipcRenderer.invoke('achievements:load-local', librarycacheDir, appId)
+  },
+  fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }> {
+    return ipcRenderer.invoke('achievements:fetch-api', appId)
+  },
+  cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult> {
+    return ipcRenderer.invoke('achievements:cache-icons', appId, gameName, icons)
+  },
+  openAchievementCacheDir(appId: string, gameName: string): Promise<void> {
+    return ipcRenderer.invoke('achievements:open-cache-dir', appId, gameName)
   },
 })

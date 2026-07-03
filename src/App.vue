@@ -5,6 +5,8 @@ import type { ImageAsset } from './shared/imageLibrary'
 import { FILE_NAME_CONFIG } from './shared/imageNameConfig'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
 import CollageDialog from './components/CollageDialog.vue'
+import GameDetail from './components/GameDetail.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
@@ -22,6 +24,8 @@ const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
 const isCollageDialogOpen = ref(false)
+const isSettingsOpen = ref(false)
+const detailGame = ref<{ appId: string; appName: string } | null>(null)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
@@ -333,6 +337,20 @@ function isSelected(path: string): boolean {
   return selectedPaths.value.has(path)
 }
 
+// 当前详情游戏的图片
+const detailImages = computed(() => {
+  if (!detailGame.value) return []
+  return images.value.filter((img) => img.appId === detailGame.value!.appId)
+})
+
+function openDetail(appId: string, appName: string): void {
+  detailGame.value = { appId, appName }
+}
+
+function closeDetail(): void {
+  detailGame.value = null
+}
+
 function toggleSelected(path: string): void {
   const next = new Set(selectedPaths.value)
   if (next.has(path)) {
@@ -518,11 +536,31 @@ async function selectDirectory(): Promise<void> {
           >
             导入 Steam 收藏夹
           </button>
+          <button
+            class="icon-button"
+            type="button"
+            title="设置"
+            @click="isSettingsOpen = true"
+          >
+            ⚙
+          </button>
         </div>
       </form>
     </section>
 
     <section class="content-panel" aria-live="polite">
+      <GameDetail
+        v-if="detailGame"
+        :app-id="detailGame.appId"
+        :app-name="detailGame.appName"
+        :images="detailImages"
+        :directory-path="directoryPath"
+        :is-selected="isSelected"
+        :toggle-selected="toggleSelected"
+        @back="closeDetail"
+      />
+
+      <div v-show="!detailGame">
       <div v-if="errorMessage" class="state-card error-state">
         {{ errorMessage }}
       </div>
@@ -618,14 +656,6 @@ async function selectDirectory(): Promise<void> {
           </span>
         </div>
 
-        <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
-          <span>已选 {{ selectedPaths.size }} 张</span>
-          <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
-          <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
-          <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
-          <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
-        </div>
-
         <div class="collection-bar" role="tablist" aria-label="按文件名筛选">
           <span class="collection-label">分类：</span>
           <span
@@ -674,7 +704,18 @@ async function selectDirectory(): Promise<void> {
               <strong :title="image.appName || image.relativePath">
                 {{ image.appName || image.relativePath }}
               </strong>
-              <span class="meta-sub">{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+              <span class="meta-sub">
+                <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+                <button
+                  v-if="image.appId"
+                  class="detail-link"
+                  type="button"
+                  title="查看详情与成就"
+                  @click.stop="openDetail(image.appId, image.appName || image.appId)"
+                >
+                  👁️
+                </button>
+              </span>
               <button
                 v-if="activeCollection !== '全部'"
                 class="ghost-button remove-button"
@@ -688,8 +729,17 @@ async function selectDirectory(): Promise<void> {
         </div>
       </template>
 
-      <div v-else class="state-card muted-state">
-        选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击“扫描”。
+      <div v-else class=”state-card muted-state”>
+        选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击”扫描”。
+      </div>
+      </div>
+
+      <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
+        <span>已选 {{ selectedPaths.size }} 张</span>
+        <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
+        <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
+        <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
+        <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
       </div>
     </section>
 
@@ -737,6 +787,11 @@ async function selectDirectory(): Promise<void> {
       v-if="isCollageDialogOpen"
       :urls="selectedImageUrls"
       @close="isCollageDialogOpen = false"
+    />
+
+    <SettingsDialog
+      v-if="isSettingsOpen"
+      @close="isSettingsOpen = false"
     />
 
     <div class="floating-controls">
@@ -834,6 +889,7 @@ h1 {
 
 .path-row {
   display: flex;
+  align-items: center;
   gap: 12px;
 }
 
@@ -855,7 +911,7 @@ input:focus {
 }
 
 button {
-  padding: 0 22px;
+  padding: 11px 22px;
   border: 0;
   border-radius: 14px;
   color: #082f49;
@@ -1212,6 +1268,24 @@ button:disabled {
   background: rgba(15, 23, 42, 0.74);
 }
 
+.icon-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 9px 15px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(147, 197, 253, 0.34);
+  color: #dbeafe;
+  font-size: 18px;
+  cursor: pointer;
+}
+.icon-button:hover {
+  color: #7dd3fc;
+}
+
 .preview-frame {
   display: flex;
   align-items: center;
@@ -1243,6 +1317,29 @@ button:disabled {
 .image-meta span {
   color: #94a3b8;
   font-size: 13px;
+}
+
+.meta-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.detail-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
+}
+.detail-link:hover {
+  opacity: 1;
+  color: #7dd3fc;
 }
 
 .dlc-toggle {

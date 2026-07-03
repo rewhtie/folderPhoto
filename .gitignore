@@ -1,5 +1,6 @@
 node_modules/
 dist/
+/achievements
 dist-electron/
 .vite/
 *.log
