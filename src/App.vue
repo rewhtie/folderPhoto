@@ -5,6 +5,8 @@ import type { ImageAsset } from './shared/imageLibrary'
 import { FILE_NAME_CONFIG } from './shared/imageNameConfig'
 import { addPathsToCollection, removePathFromCollection, type Collections } from './shared/collections'
 import CollageDialog from './components/CollageDialog.vue'
+import GameDetail from './components/GameDetail.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
@@ -22,6 +24,8 @@ const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
 const isCollageDialogOpen = ref(false)
+const isSettingsOpen = ref(false)
+const detailGame = ref<{ appId: string; appName: string } | null>(null)
 const collectionNameInput = ref('')
 const isExporting = ref(false)
 const toastMessage = ref('')
@@ -333,6 +337,20 @@ function isSelected(path: string): boolean {
   return selectedPaths.value.has(path)
 }
 
+// 当前详情游戏的图片
+const detailImages = computed(() => {
+  if (!detailGame.value) return []
+  return images.value.filter((img) => img.appId === detailGame.value!.appId)
+})
+
+function openDetail(appId: string, appName: string): void {
+  detailGame.value = { appId, appName }
+}
+
+function closeDetail(): void {
+  detailGame.value = null
+}
+
 function toggleSelected(path: string): void {
   const next = new Set(selectedPaths.value)
   if (next.has(path)) {
@@ -518,11 +536,31 @@ async function selectDirectory(): Promise<void> {
           >
             导入 Steam 收藏夹
           </button>
+          <button
+            class="icon-button"
+            type="button"
+            title="设置"
+            @click="isSettingsOpen = true"
+          >
+            ⚙
+          </button>
         </div>
       </form>
     </section>
 
     <section class="content-panel" aria-live="polite">
+      <GameDetail
+        v-if="detailGame"
+        :app-id="detailGame.appId"
+        :app-name="detailGame.appName"
+        :images="detailImages"
+        :directory-path="directoryPath"
+        :is-selected="isSelected"
+        :toggle-selected="toggleSelected"
+        @back="closeDetail"
+      />
+
+      <template v-else>
       <div v-if="errorMessage" class="state-card error-state">
         {{ errorMessage }}
       </div>
@@ -667,6 +705,15 @@ async function selectDirectory(): Promise<void> {
                 @change="toggleSelected(image.absolutePath)"
               />
             </label>
+            <button
+              v-if="image.appId"
+              class="detail-button"
+              type="button"
+              title="查看游戏详情与成就"
+              @click.stop="openDetail(image.appId, image.appName || image.appId)"
+            >
+              详情
+            </button>
             <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
               <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
             </div>
@@ -691,6 +738,7 @@ async function selectDirectory(): Promise<void> {
       <div v-else class="state-card muted-state">
         选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击“扫描”。
       </div>
+      </template>
     </section>
 
     <div v-if="isCollectionDialogOpen" class="dialog-backdrop" @click.self="cancelCollectionDialog">
@@ -737,6 +785,11 @@ async function selectDirectory(): Promise<void> {
       v-if="isCollageDialogOpen"
       :urls="selectedImageUrls"
       @close="isCollageDialogOpen = false"
+    />
+
+    <SettingsDialog
+      v-if="isSettingsOpen"
+      @close="isSettingsOpen = false"
     />
 
     <div class="floating-controls">
@@ -1210,6 +1263,46 @@ button:disabled {
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.74);
+}
+
+.detail-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 4px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.image-card:hover .detail-button {
+  opacity: 1;
+}
+.detail-button:hover {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+}
+
+.icon-button {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 18px;
+  cursor: pointer;
+}
+.icon-button:hover {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
 }
 
 .preview-frame {
