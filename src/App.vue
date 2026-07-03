@@ -887,6 +887,7 @@ h1 {
 
 .path-row {
   display: flex;
+  align-items: center;
   gap: 12px;
 }
 
@@ -1267,15 +1268,17 @@ button:disabled {
 
 .detail-button {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 2;
-  padding: 4px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.85);
+  padding: 8px 18px;
+  border: 1px solid rgba(125, 211, 252, 0.5);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
   color: #e2e8f0;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -1286,17 +1289,20 @@ button:disabled {
 .detail-button:hover {
   border-color: #7dd3fc;
   color: #7dd3fc;
+  background: rgba(15, 23, 42, 1);
 }
 
 .icon-button {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
-  color: #e2e8f0;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(147, 197, 253, 0.34);
+  color: #dbeafe;
   font-size: 18px;
   cursor: pointer;
 }

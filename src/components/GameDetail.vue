@@ -73,9 +73,13 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 <template>
   <div class="game-detail">
     <div class="detail-header">
-      <button class="ghost-button" type="button" @click="emit('back')">← 返回</button>
-      <h2>{{ appName }}</h2>
-      <span class="detail-appid">{{ appId }} · {{ images.length }} 张图片</span>
+      <button class="back-button" type="button" @click="emit('back')">
+        <span class="back-arrow">←</span> 返回列表
+      </button>
+      <div class="detail-title">
+        <h2>{{ appName }}</h2>
+        <span class="detail-appid">{{ appId }} · {{ images.length }} 张图片</span>
+      </div>
     </div>
 
     <section class="detail-section">
@@ -152,11 +156,37 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 }
 .detail-header {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 20px;
   flex-wrap: wrap;
 }
-.detail-header h2 {
+.back-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 12px;
+  color: #dbeafe;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.back-button:hover {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
+}
+.back-arrow {
+  font-size: 18px;
+}
+.detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-title h2 {
   margin: 0;
 }
 .detail-appid {
