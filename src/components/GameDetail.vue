@@ -40,32 +40,15 @@ async function loadAchievements(): Promise<void> {
   achievements.value = []
   cacheMessage.value = ''
   try {
-    // 优先尝试 Web API（若已配置）
     const result = await window.imageLibrary.fetchApiAchievements(props.appId)
-    if (!result.error && result.achievements.length > 0) {
-      achievementSource.value = result.source
-      achievements.value = result.achievements
-      // 后台缓存图标
-      void cacheIcons(result.achievements)
-      return
-    }
-    // API 未配置或失败 → 退回本地
     if (result.error) {
-      // 尝试本地
-      const local = await window.imageLibrary.loadLocalAchievements(props.directoryPath, props.appId)
-      if (local.achievements.length > 0) {
-        achievementSource.value = 'local'
-        achievements.value = local.achievements
-        achievementError.value = '仅显示本地解锁状态，配置 Web API 可显示图标和名称'
-        return
-      }
-      // 本地也没有
       achievementSource.value = null
-      achievementError.value = '需要配置 Web API 获取成就'
+      achievementError.value = result.error
       return
     }
     achievementSource.value = result.source
     achievements.value = result.achievements
+    // 后台缓存图标
     void cacheIcons(result.achievements)
   } catch (err) {
     achievementError.value = err instanceof Error ? err.message : '加载失败'
