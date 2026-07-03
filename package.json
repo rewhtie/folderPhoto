@@ -27,11 +27,15 @@
       "dist-electron/**",
       "package.json"
     ],
+    "electronDist": "node_modules/electron/dist",
     "win": {
-      "target": "portable"
+      "target": "nsis"
     },
-    "portable": {
-      "artifactName": "SteamImageBrowser.exe"
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "SteamImageBrowser-Setup-${version}.exe"
     }
   },
   "dependencies": {

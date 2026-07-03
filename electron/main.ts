@@ -22,9 +22,16 @@ import type { SteamSettings } from './settingsStore.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// 收藏夹存储位置：打包后放 exe 同级目录，开发时放项目根目录，均不写入 C 盘系统目录
-const packagedDirectory = process.env.PORTABLE_EXECUTABLE_DIR ?? dirname(app.getPath('exe'))
-const collectionsDirectory = app.isPackaged ? packagedDirectory : join(__dirname, '..', '..')
+// 数据存储位置：
+// - portable 版：放 exe 同级目录（PORTABLE_EXECUTABLE_DIR）
+// - 安装版：放 userData（%APPDATA%/SteamImageBrowser），避免 Program Files 无写权限
+// - 开发时：放项目根目录
+const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR
+const collectionsDirectory = isPortable
+  ? process.env.PORTABLE_EXECUTABLE_DIR!
+  : app.isPackaged
+    ? app.getPath('userData')
+    : join(__dirname, '..', '..')
 setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
 setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
 setAchievementsBaseDir(collectionsDirectory)
@@ -64,8 +71,7 @@ function createWindow(): void {
     return
   }
 
-  void mainWindow.loadFile(join(__dirname, '../dist/index.html'))
-  mainWindow.webContents.openDevTools({ mode: 'detach' })
+  void mainWindow.loadFile(join(__dirname, '../../dist/index.html'))
 }
 
 ipcMain.handle('image-library:scan-images', (_event, directoryPath: string, options: { includeDlc?: boolean }) => {
