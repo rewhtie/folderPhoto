@@ -224,9 +224,10 @@ onMounted(() => {
                 :src="coverUrl(game.appid)"
                 :alt="game.name"
                 loading="lazy"
-                @error="(e) => (e.target as HTMLImageElement).classList.add('cover-broken')"
+                @error="(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLElement).parentElement?.classList.add('cover-failed') }"
               />
-              <div class="cover-meta">
+              <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
+              <div class="cover-meta" :class="{ 'meta-mini': tier === 's' }">
                 <strong>{{ game.name || `#${game.appid}` }}</strong>
                 <span>{{ formatPlaytime(game.playtimeForever) }}</span>
               </div>
@@ -349,8 +350,20 @@ h1 {
   width: 100%;
   height: auto;
 }
-.cover-broken {
-  visibility: hidden;
+.cover-failed .cover-placeholder {
+  display: flex;
+}
+.cover-placeholder {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  word-break: break-all;
 }
 .cover-meta {
   position: absolute;
@@ -371,5 +384,14 @@ h1 {
 .cover-meta span {
   font-size: 10px;
   color: #7dd3fc;
+}
+.meta-mini strong {
+  font-size: 9px;
+}
+.meta-mini span {
+  font-size: 8px;
+}
+.meta-mini {
+  padding: 2px 4px;
 }
 </style>
