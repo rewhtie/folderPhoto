@@ -7,8 +7,11 @@ import { addPathsToCollection, removePathFromCollection, type Collections } from
 import CollageDialog from './components/CollageDialog.vue'
 import GameDetail from './components/GameDetail.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+import CareerCollage from './components/CareerCollage.vue'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
+
+const activeTab = ref<'browser' | 'career'>('browser')
 
 const directoryPath = ref(DEFAULT_LIBRARYCACHE_PATH)
 const images = ref<ImageAsset[]>([])
@@ -504,8 +507,15 @@ async function selectDirectory(): Promise<void> {
 </script>
 
 <template>
-  <main class="page-shell">
-    <section class="hero-panel">
+  <div class="app-shell">
+    <nav class="tab-bar">
+      <button :class="{ active: activeTab === 'browser' }" @click="activeTab = 'browser'">图片浏览器</button>
+      <button :class="{ active: activeTab === 'career' }" @click="activeTab = 'career'">职业游戏生涯拼图</button>
+    </nav>
+
+    <div v-show="activeTab === 'browser'">
+    <main class="page-shell">
+      <section class="hero-panel">
       <h1>steam本地游戏封面获取</h1>
       <p class="description">
         输入 Steam librarycache 文件夹路径，查找 封面图片、背景、宽幅封面图片、徽标。
@@ -807,10 +817,41 @@ async function selectDirectory(): Promise<void> {
     </div>
 
     <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
-  </main>
+    </main>
+    </div>
+
+    <CareerCollage v-if="activeTab === 'career'" />
+  </div>
 </template>
 
 <style scoped>
+.app-shell {
+  min-height: 100vh;
+}
+.tab-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 8px 40px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+.tab-bar button {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tab-bar button.active {
+  background: rgba(125, 211, 252, 0.18);
+  color: #7dd3fc;
+}
 :global(*) {
   box-sizing: border-box;
 }
