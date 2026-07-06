@@ -13,6 +13,12 @@ import {
   loadCachedAchievements,
   saveAchievementCache,
 } from './achievementStore.js'
+import {
+  fetchOwnedGames,
+  loadCachedOwnedGames,
+  saveOwnedGamesCache,
+  setOwnedGamesCacheBaseDir,
+} from './ownedGamesStore.js'
 import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
@@ -36,6 +42,7 @@ setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
 setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
 setAchievementsBaseDir(collectionsDirectory)
 setAchievementCacheBaseDir(collectionsDirectory)
+setOwnedGamesCacheBaseDir(collectionsDirectory)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -183,6 +190,28 @@ ipcMain.handle('achievements:cache-icons', async (_event, appId: string, gameNam
 ipcMain.handle('achievements:open-cache-dir', async (_event, appId: string, gameName: string) => {
   const dir = getAchievementCacheDir(appId, gameName)
   await shell.openPath(dir)
+})
+
+ipcMain.handle('owned-games:fetch', async (_event, force?: boolean) => {
+  if (!force) {
+    const cached = await loadCachedOwnedGames()
+    if (cached) return { games: cached }
+  }
+
+  const settings = await loadSettings()
+  if (!settings.apiKey || !settings.steamId) {
+    return { games: [], error: '未配置 Web API' }
+  }
+  try {
+    const games = await fetchOwnedGames(settings.apiKey, settings.steamId)
+    await saveOwnedGamesCache(games)
+    return { games }
+  } catch (err) {
+    return {
+      games: [],
+      error: err instanceof Error ? err.message : '请求失败',
+    }
+  }
 })
 
 app.whenReady().then(() => {

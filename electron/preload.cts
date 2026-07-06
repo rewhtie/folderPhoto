@@ -6,6 +6,7 @@ import type { SteamCollection } from './steamCollections.js'
 import type { SteamSettings } from './settingsStore.js'
 import type { AchievementResult } from './achievementStore.js'
 import type { CacheIconsResult } from './achievementCache.js'
+import type { OwnedGamesResult } from '../src/shared/ownedGames.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
   scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
@@ -46,5 +47,8 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   },
   openAchievementCacheDir(appId: string, gameName: string): Promise<void> {
     return ipcRenderer.invoke('achievements:open-cache-dir', appId, gameName)
+  },
+  fetchOwnedGames(force?: boolean): Promise<OwnedGamesResult> {
+    return ipcRenderer.invoke('owned-games:fetch', force ?? false)
   },
 })

@@ -1,4 +1,4 @@
-import type { OwnedGame } from './ownedGames'
+import type { OwnedGame } from './ownedGames.js'
 
 export type Tier = 'xl' | 'l' | 'm' | 's'
 export type Orientation = 'landscape' | 'portrait'
