@@ -8,17 +8,20 @@ export interface TieredGames {
   l: OwnedGame[]
   m: OwnedGame[]
   s: OwnedGame[]
+  family: OwnedGame[] // 家庭共享游戏（无 API 时长）
 }
 
 // 按个人库分位分档：XL 前 10%，L 10-30%，M 30-60%，S 60-100%
-// 仅对 playtimeForever > 0 的游戏分档
+// 仅对 playtimeForever > 0 且非 family 的游戏分档
 export function tierGames(games: OwnedGame[]): TieredGames {
   const played = games
-    .filter((g) => g.playtimeForever > 0)
+    .filter((g) => !g.isFamily && g.playtimeForever > 0)
     .sort((a, b) => b.playtimeForever - a.playtimeForever)
 
+  const family = games.filter((g) => g.isFamily)
+
   const n = played.length
-  const empty: TieredGames = { xl: [], l: [], m: [], s: [] }
+  const empty: TieredGames = { xl: [], l: [], m: [], s: [], family }
   if (n === 0) return empty
   if (n < 4) return { ...empty, xl: played } // 退化：全部 XL，UI 统一大小
 
@@ -31,5 +34,6 @@ export function tierGames(games: OwnedGame[]): TieredGames {
     l: played.slice(xlEnd, lEnd),
     m: played.slice(lEnd, mEnd),
     s: played.slice(mEnd),
+    family,
   }
 }

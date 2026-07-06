@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OwnedGame } from '../src/shared/ownedGames.js'
 
@@ -59,6 +59,30 @@ export function parseOwnedGamesResponse(data: unknown): OwnedGame[] {
     name: g.name ?? '',
     playtimeForever: g.playtime_forever ?? 0,
   }))
+}
+
+// 扫描 librarycache 目录，获取所有游戏 appid（含家庭共享）
+export async function scanLibraryCacheAppIds(libraryCacheDir: string): Promise<number[]> {
+  try {
+    const entries = await readdir(libraryCacheDir, { withFileTypes: true })
+    return entries
+      .filter((e) => e.isDirectory() && /^\d+$/.test(e.name))
+      .map((e) => Number(e.name))
+  } catch {
+    return []
+  }
+}
+
+// 合并 API 数据与 librarycache appids，family 游戏标记 isFamily
+export function mergeWithLibraryCache(
+  apiGames: OwnedGame[],
+  libraryCacheAppIds: number[],
+): OwnedGame[] {
+  const apiAppIds = new Set(apiGames.map((g) => g.appid))
+  const familyGames: OwnedGame[] = libraryCacheAppIds
+    .filter((id) => !apiAppIds.has(id))
+    .map((appid) => ({ appid, name: '', playtimeForever: 0, isFamily: true }))
+  return [...apiGames, ...familyGames]
 }
 
 // 调 Steam Web API：IPlayerService/GetOwnedGames/v1/

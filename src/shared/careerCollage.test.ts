@@ -8,7 +8,7 @@ function game(appid: number, playtime: number): OwnedGame {
 
 describe('tierGames', () => {
   it('returns all empty for zero games', () => {
-    expect(tierGames([])).toEqual({ xl: [], l: [], m: [], s: [] })
+    expect(tierGames([])).toEqual({ xl: [], l: [], m: [], s: [], family: [] })
   })
 
   it('filters out unplayed games (playtime 0)', () => {
@@ -23,6 +23,7 @@ describe('tierGames', () => {
     expect(result.l).toEqual([])
     expect(result.m).toEqual([])
     expect(result.s).toEqual([])
+    expect(result.family).toEqual([])
   })
 
   it('n = 10: splits 1/2/3/4', () => {
@@ -50,5 +51,17 @@ describe('tierGames', () => {
     expect(result.l[0].appid).toBe(2) // 990 min, index 1
     expect(result.m[0].appid).toBe(4) // 970 min, index 3
     expect(result.s[0].appid).toBe(7) // 940 min, index 6
+  })
+
+  it('separates family games into family array', () => {
+    const games = [
+      game(1, 300),
+      game(2, 200),
+      { appid: 99, name: 'family game', playtimeForever: 0, isFamily: true },
+    ]
+    const result = tierGames(games)
+    expect(result.xl).toHaveLength(2)
+    expect(result.family).toHaveLength(1)
+    expect(result.family[0].appid).toBe(99)
   })
 })

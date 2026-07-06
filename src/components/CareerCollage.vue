@@ -43,11 +43,12 @@ function formatPlaytime(minutes: number): string {
 }
 
 const totalHours = computed(() => {
-  const mins = games.value.reduce((sum, g) => sum + g.playtimeForever, 0)
+  const mins = games.value.filter((g) => !g.isFamily).reduce((sum, g) => sum + g.playtimeForever, 0)
   return Math.round(mins / 60)
 })
 
-const playedCount = computed(() => games.value.filter((g) => g.playtimeForever > 0).length)
+const playedCount = computed(() => games.value.filter((g) => !g.isFamily && g.playtimeForever > 0).length)
+const familyCount = computed(() => games.value.filter((g) => g.isFamily).length)
 
 async function load(force = false): Promise<void> {
   loading.value = true
@@ -199,7 +200,7 @@ onMounted(() => {
         <button class="secondary-button" :disabled="isExporting || playedCount === 0" @click="exportPng">
           {{ isExporting ? '导出中…' : '导出图片' }}
         </button>
-        <span class="stats" v-if="games.length > 0">{{ playedCount }} 个游戏 · {{ totalHours }}h</span>
+        <span class="stats" v-if="games.length > 0">{{ playedCount }} 个游戏 · {{ totalHours }}h<span v-if="familyCount > 0"> · {{ familyCount }} 个家庭共享</span></span>
       </div>
     </section>
 
@@ -231,6 +232,25 @@ onMounted(() => {
                 <strong>{{ game.name || `#${game.appid}` }}</strong>
                 <span>{{ formatPlaytime(game.playtimeForever) }}</span>
               </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="tiered.family.length > 0" class="tier-block">
+          <h2 class="tier-label tier-label-family">家庭共享 · {{ tiered.family.length }} 个 · 时长未知</h2>
+          <div class="cover-row">
+            <div
+              v-for="game in tiered.family"
+              :key="game.appid"
+              class="cover cover-family"
+              :style="{ width: coverWidth('s') + 'px' }"
+            >
+              <img
+                :src="coverUrl(game.appid)"
+                :alt="game.name"
+                loading="lazy"
+                @error="(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLElement).parentElement?.classList.add('cover-failed') }"
+              />
+              <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
             </div>
           </div>
         </div>
@@ -393,5 +413,11 @@ h1 {
 }
 .meta-mini {
   padding: 2px 4px;
+}
+.tier-label-family {
+  color: #94a3b8;
+}
+.cover-family {
+  opacity: 0.7;
 }
 </style>
