@@ -6,6 +6,7 @@ import { tierGames, type Tier, type Orientation, type TieredGames } from '../sha
 const games = ref<OwnedGame[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
+const isExporting = ref(false)
 const orientation = ref<Orientation>('landscape')
 
 const tiered = computed<TieredGames>(() => tierGames(games.value))
@@ -62,6 +63,120 @@ async function load(force = false): Promise<void> {
   }
 }
 
+// --- PNG 导出 ---
+const exportSizes: Record<Orientation, Record<Tier, number>> = {
+  landscape: { xl: 440, l: 320, m: 240, s: 160 },
+  portrait: { xl: 260, l: 190, m: 140, s: 96 },
+}
+
+function aspectRatio(): number {
+  return orientation.value === 'landscape' ? 460 / 215 : 600 / 900
+}
+
+async function loadBitmap(appid: number): Promise<ImageBitmap | null> {
+  try {
+    const url = coverUrl(appid)
+    const resp = await fetch(url)
+    if (!resp.ok) return null
+    const blob = await resp.blob()
+    return await createImageBitmap(blob)
+  } catch {
+    return null
+  }
+}
+
+async function exportPng(): Promise<void> {
+  if (isExporting.value) return
+  isExporting.value = true
+  try {
+    const padding = 40
+    const canvasWidth = 1920
+    const ratio = aspectRatio()
+    const ctxCanvas = document.createElement('canvas')
+    const ctx = ctxCanvas.getContext('2d')
+    if (!ctx) return
+
+    // 先计算总高度
+    let y = padding
+    const tierSections: { tier: Tier; covers: OwnedGame[]; coverW: number; coverH: number }[] = []
+    for (const tier of tierOrder) {
+      const covers = tiered.value[tier]
+      if (covers.length === 0) continue
+      const w = exportSizes[orientation.value][tier]
+      const h = w / ratio
+      tierSections.push({ tier, covers, coverW: w, coverH: h })
+      y += 50 // 档位标签高度
+      const usableWidth = canvasWidth - padding * 2
+      const perRow = Math.max(1, Math.floor(usableWidth / (w + 10)))
+      const rows = Math.ceil(covers.length / perRow)
+      y += rows * (h + 10)
+    }
+    const totalHeight = y + padding
+    ctxCanvas.width = canvasWidth
+    ctxCanvas.height = totalHeight
+    ctx.fillStyle = '#101827'
+    ctx.fillRect(0, 0, canvasWidth, totalHeight)
+
+    // 绘制每个档位
+    let cursorY = padding
+    for (const section of tierSections) {
+      ctx.fillStyle = '#7dd3fc'
+      ctx.font = 'bold 28px sans-serif'
+      ctx.fillText(
+        `${tierLabels[section.tier]} · ${section.covers.length} 个`,
+        padding,
+        cursorY + 28,
+      )
+      cursorY += 50
+
+      const { coverW: w, coverH: h } = section
+      const usableWidth = canvasWidth - padding * 2
+      const perRow = Math.max(1, Math.floor(usableWidth / (w + 10)))
+      const bitmaps = await Promise.all(section.covers.map((g) => loadBitmap(g.appid)))
+      for (let i = 0; i < section.covers.length; i++) {
+        const game = section.covers[i]
+        const bmp = bitmaps[i]
+        const col = i % perRow
+        const x = padding + col * (w + 10)
+        if (bmp) {
+          const srcRatio = bmp.width / bmp.height
+          let sx = 0, sy = 0, sw = bmp.width, sh = bmp.height
+          if (srcRatio > ratio) {
+            sw = bmp.height * ratio
+            sx = (bmp.width - sw) / 2
+          } else {
+            sh = bmp.width / ratio
+            sy = (bmp.height - sh) / 2
+          }
+          ctx.drawImage(bmp, sx, sy, sw, sh, x, cursorY, w, h)
+        } else {
+          ctx.fillStyle = '#1e293b'
+          ctx.fillRect(x, cursorY, w, h)
+        }
+        // 底部文字条
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'
+        ctx.fillRect(x, cursorY + h - 28, w, 28)
+        ctx.fillStyle = '#e2e8f0'
+        ctx.font = 'bold 13px sans-serif'
+        const name = game.name || `#${game.appid}`
+        ctx.fillText(name.slice(0, 20), x + 6, cursorY + h - 14)
+        ctx.fillStyle = '#7dd3fc'
+        ctx.font = '12px sans-serif'
+        ctx.fillText(formatPlaytime(game.playtimeForever), x + 6, cursorY + h - 4)
+      }
+      const rows = Math.ceil(section.covers.length / perRow)
+      cursorY += rows * (h + 10)
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => ctxCanvas.toBlob(resolve, 'image/png'))
+    if (!blob) return
+    const buffer = await blob.arrayBuffer()
+    await window.imageLibrary.saveCollage(buffer, 'career-collage.png')
+  } finally {
+    isExporting.value = false
+  }
+}
+
 onMounted(() => {
   void load()
 })
@@ -80,6 +195,9 @@ onMounted(() => {
         </div>
         <button class="secondary-button" :disabled="loading" @click="load(true)">
           {{ loading ? '刷新中…' : '刷新' }}
+        </button>
+        <button class="secondary-button" :disabled="isExporting || playedCount === 0" @click="exportPng">
+          {{ isExporting ? '导出中…' : '导出图片' }}
         </button>
         <span class="stats" v-if="games.length > 0">{{ playedCount }} 个游戏 · {{ totalHours }}h</span>
       </div>
