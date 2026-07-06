@@ -3,6 +3,7 @@
 
 import type { ScanImagesResult, SelectDirectoryResult } from './shared/imageLibrary'
 import type { Collections } from './shared/collections'
+import type { OwnedGamesResult } from './shared/ownedGames'
 
 interface ExportResult {
   copied: number
@@ -58,6 +59,7 @@ declare global {
       fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>
       cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
       openAchievementCacheDir(appId: string, gameName: string): Promise<void>
+      fetchOwnedGames(force?: boolean): Promise<OwnedGamesResult>
     }
   }
 }
