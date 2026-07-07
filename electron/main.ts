@@ -14,12 +14,10 @@ import {
   saveAchievementCache,
 } from './achievementStore.js'
 import {
-  fetchOwnedGames,
+  fetchOwnedGamesWithLibrary,
   loadCachedOwnedGames,
   saveOwnedGamesCache,
   setOwnedGamesCacheBaseDir,
-  scanLibraryCacheAppIds,
-  mergeWithLibraryCache,
 } from './ownedGamesStore.js'
 import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
@@ -205,11 +203,8 @@ ipcMain.handle('owned-games:fetch', async (_event, force?: boolean) => {
     return { games: [], error: '未配置 Web API' }
   }
   try {
-    const apiGames = await fetchOwnedGames(settings.apiKey, settings.steamId)
-    // 扫描 librarycache 补充家庭共享游戏
     const defaultLibraryCache = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
-    const libraryAppIds = await scanLibraryCacheAppIds(defaultLibraryCache)
-    const games = mergeWithLibraryCache(apiGames, libraryAppIds)
+    const games = await fetchOwnedGamesWithLibrary(settings.apiKey, settings.steamId, defaultLibraryCache)
     await saveOwnedGamesCache(games)
     return { games }
   } catch (err) {

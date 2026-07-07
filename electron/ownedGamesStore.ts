@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OwnedGame } from '../src/shared/ownedGames.js'
+import { loadAppInfoEntries } from './appInfoStore.js'
+import type { AppInfoEntry } from './appInfoParser.js'
 
 let cacheBaseDir = ''
 
@@ -74,15 +76,46 @@ export async function scanLibraryCacheAppIds(libraryCacheDir: string): Promise<n
 }
 
 // 合并 API 数据与 librarycache appids，family 游戏标记 isFamily
+// 用 appInfo 过滤 DLC，并给 family 游戏补名字
 export function mergeWithLibraryCache(
   apiGames: OwnedGame[],
   libraryCacheAppIds: number[],
+  appInfoEntries: Record<string, AppInfoEntry>,
 ): OwnedGame[] {
   const apiAppIds = new Set(apiGames.map((g) => g.appid))
   const familyGames: OwnedGame[] = libraryCacheAppIds
     .filter((id) => !apiAppIds.has(id))
-    .map((appid) => ({ appid, name: '', playtimeForever: 0, isFamily: true }))
-  return [...apiGames, ...familyGames]
+    .filter((id) => {
+      const info = appInfoEntries[String(id)]
+      // 没有 appinfo 的保留（无法判断），有 type 的过滤掉 DLC
+      return !info || info.type.toLowerCase() !== 'dlc'
+    })
+    .map((appid) => ({
+      appid,
+      name: appInfoEntries[String(appid)]?.name ?? '',
+      playtimeForever: 0,
+      isFamily: true,
+    }))
+  // 也从 API 结果里过滤掉 DLC（API 偶尔会返回 DLC）
+  const ownedNonDlc = apiGames.filter((g) => {
+    const info = appInfoEntries[String(g.appid)]
+    return !info || info.type.toLowerCase() !== 'dlc'
+  })
+  return [...ownedNonDlc, ...familyGames]
+}
+
+// 扫描 librarycache 并加载 appinfo，返回合并后的游戏列表
+export async function fetchOwnedGamesWithLibrary(
+  apiKey: string,
+  steamId: string,
+  libraryCacheDir: string,
+): Promise<OwnedGame[]> {
+  const [apiGames, libraryAppIds, appInfoEntries] = await Promise.all([
+    fetchOwnedGames(apiKey, steamId),
+    scanLibraryCacheAppIds(libraryCacheDir),
+    loadAppInfoEntries(libraryCacheDir),
+  ])
+  return mergeWithLibraryCache(apiGames, libraryAppIds, appInfoEntries)
 }
 
 // 调 Steam Web API：IPlayerService/GetOwnedGames/v1/
