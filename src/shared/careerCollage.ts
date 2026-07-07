@@ -12,13 +12,14 @@ export interface TieredGames {
 }
 
 // 按个人库分位分档：XL 前 10%，L 10-30%，M 30-60%，S 60-100%
-// 仅对 playtimeForever > 0 且非 family 的游戏分档
+// 对 playtimeForever > 0 的游戏分档（含从最近游玩拿到时长的家庭游戏）
+// 家庭共享且无时长的游戏单独放 family 数组
 export function tierGames(games: OwnedGame[]): TieredGames {
   const played = games
-    .filter((g) => !g.isFamily && g.playtimeForever > 0)
+    .filter((g) => g.playtimeForever > 0)
     .sort((a, b) => b.playtimeForever - a.playtimeForever)
 
-  const family = games.filter((g) => g.isFamily)
+  const family = games.filter((g) => g.isFamily && g.playtimeForever === 0)
 
   const n = played.length
   const empty: TieredGames = { xl: [], l: [], m: [], s: [], family }

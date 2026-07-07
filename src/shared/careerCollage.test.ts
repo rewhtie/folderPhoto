@@ -64,4 +64,18 @@ describe('tierGames', () => {
     expect(result.family).toHaveLength(1)
     expect(result.family[0].appid).toBe(99)
   })
+
+  it('family games with playtime (from recently played) join tiers', () => {
+    const games = [
+      game(1, 300),
+      game(2, 200),
+      game(3, 100),
+      { appid: 99, name: 'family game', playtimeForever: 250, isFamily: true },
+    ]
+    const result = tierGames(games)
+    // family game with playtime 250 should be in tiers (it's the 2nd most played)
+    const allTiers = [...result.xl, ...result.l, ...result.m, ...result.s]
+    expect(allTiers.map((g) => g.appid)).toContain(99)
+    expect(result.family).toHaveLength(0)
+  })
 })

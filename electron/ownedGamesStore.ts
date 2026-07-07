@@ -77,26 +77,30 @@ export async function scanLibraryCacheAppIds(libraryCacheDir: string): Promise<n
 
 // 合并 API 数据与 librarycache appids，family 游戏标记 isFamily
 // 用 appInfo 过滤 DLC，并给 family 游戏补名字
+// recentlyPlayed 用于给家庭游戏补 playtime_forever（仅最近两周玩过的）
 export function mergeWithLibraryCache(
   apiGames: OwnedGame[],
   libraryCacheAppIds: number[],
   appInfoEntries: Record<string, AppInfoEntry>,
+  recentlyPlayed?: Map<number, number>,
 ): OwnedGame[] {
   const apiAppIds = new Set(apiGames.map((g) => g.appid))
   const familyGames: OwnedGame[] = libraryCacheAppIds
     .filter((id) => !apiAppIds.has(id))
     .filter((id) => {
       const info = appInfoEntries[String(id)]
-      // 没有 appinfo 的保留（无法判断），有 type 的过滤掉 DLC
       return !info || info.type.toLowerCase() !== 'dlc'
     })
-    .map((appid) => ({
-      appid,
-      name: appInfoEntries[String(appid)]?.name ?? '',
-      playtimeForever: 0,
-      isFamily: true,
-    }))
-  // 也从 API 结果里过滤掉 DLC（API 偶尔会返回 DLC）
+    .map((appid) => {
+      const playtime = recentlyPlayed?.get(appid) ?? 0
+      return {
+        appid,
+        name: appInfoEntries[String(appid)]?.name ?? '',
+        playtimeForever: playtime,
+        isFamily: true,
+      }
+    })
+  // 也从 API 结果里过滤掉 DLC
   const ownedNonDlc = apiGames.filter((g) => {
     const info = appInfoEntries[String(g.appid)]
     return !info || info.type.toLowerCase() !== 'dlc'
@@ -110,12 +114,13 @@ export async function fetchOwnedGamesWithLibrary(
   steamId: string,
   libraryCacheDir: string,
 ): Promise<OwnedGame[]> {
-  const [apiGames, libraryAppIds, appInfoEntries] = await Promise.all([
+  const [apiGames, libraryAppIds, appInfoEntries, recentlyPlayed] = await Promise.all([
     fetchOwnedGames(apiKey, steamId),
     scanLibraryCacheAppIds(libraryCacheDir),
     loadAppInfoEntries(libraryCacheDir),
+    fetchRecentlyPlayedGames(apiKey, steamId),
   ])
-  return mergeWithLibraryCache(apiGames, libraryAppIds, appInfoEntries)
+  return mergeWithLibraryCache(apiGames, libraryAppIds, appInfoEntries, recentlyPlayed)
 }
 
 // 调 Steam Web API：IPlayerService/GetOwnedGames/v1/
@@ -127,4 +132,25 @@ export async function fetchOwnedGames(apiKey: string, steamId: string): Promise<
   }
   const data = await response.json()
   return parseOwnedGamesResponse(data)
+}
+
+// 调 Steam Web API：IPlayerService/GetRecentlyPlayedGames/v1/
+// 返回最近两周玩过的游戏（含家庭共享），带 playtime_forever
+export async function fetchRecentlyPlayedGames(apiKey: string, steamId: string): Promise<Map<number, number>> {
+  const url = `https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&format=json`
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return new Map()
+    const data = (await response.json()) as { response?: { games?: Array<{ appid: number; playtime_forever?: number }> } }
+    const games = data.response?.games ?? []
+    const map = new Map<number, number>()
+    for (const g of games) {
+      if (typeof g.playtime_forever === 'number') {
+        map.set(g.appid, g.playtime_forever)
+      }
+    }
+    return map
+  } catch {
+    return new Map()
+  }
 }
