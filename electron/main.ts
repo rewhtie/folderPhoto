@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
-import { imageSourceUrlToFileUrl } from './imageProtocol.js'
+import { imageSourceUrlToFileUrl, toImageSourceUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
 import { loadSettings, saveSettings, setSettingsFilePath } from './settingsStore.js'
 import {
@@ -125,6 +125,20 @@ ipcMain.handle('collections:choose-export-directory', async () => {
 
 ipcMain.handle('collections:export-images', (_event, targetDirectory: string, absolutePaths: string[]) => {
   return exportImages(targetDirectory, absolutePaths)
+})
+
+ipcMain.handle('collage:pick-local-images', async () => {
+  const result = await dialog.showOpenDialog({
+    title: '选择本地图片',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'] }],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths.map((p) => toImageSourceUrl(p))
 })
 
 ipcMain.handle('collage:save', async (_event, buffer: ArrayBuffer, suggestedName: string) => {

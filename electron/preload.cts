@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null> {
     return ipcRenderer.invoke('collage:save', buffer, suggestedName)
   },
+  pickLocalImages(): Promise<string[] | null> {
+    return ipcRenderer.invoke('collage:pick-local-images')
+  },
   loadSettings(): Promise<SteamSettings> {
     return ipcRenderer.invoke('settings:load')
   },

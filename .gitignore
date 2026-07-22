@@ -8,4 +8,5 @@ dist-electron/
 settings.json
 collections.json
 app-names.json
+owned-games.json
 release/

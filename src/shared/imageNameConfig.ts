@@ -9,6 +9,7 @@ export const FILE_NAME_CONFIG: Record<string, string> = {
   'library_header_schinese.jpg': '宽幅封面图片-中文',
   'header.jpg': '宽幅封面图片',
   'logo_schinese.png': '徽标',
+  'library_capsule.jpg': '封面图片',
   'library_capsule_schinese.jpg': '封面图片-中文',
   'library_600x900_schinese.jpg': '封面图片-中文',
   'library_600x900.jpg': '封面图片',

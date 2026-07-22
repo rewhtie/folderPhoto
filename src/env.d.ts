@@ -54,6 +54,7 @@ declare global {
       chooseExportDirectory(): Promise<string | null>
       exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult>
       saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
+      pickLocalImages(): Promise<string[] | null>
       loadSettings(): Promise<SteamSettings>
       saveSettings(settings: SteamSettings): Promise<void>
       fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>

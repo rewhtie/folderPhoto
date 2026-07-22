@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { computeLayout, dominantAspectRatio, moveItem, type CollageImage } from '../shared/collage'
 
 const props = defineProps<{ urls: string[] }>()
 const emit = defineEmits<{ close: [] }>()
 
-const n = computed(() => props.urls.length)
+const localUrls = ref<string[]>([])
+const allUrls = computed(() => [...props.urls, ...localUrls.value])
+const n = computed(() => allUrls.value.length)
 
 const rows = ref(1)
 const cols = ref(1)
@@ -40,6 +42,14 @@ onMounted(() => {
   rows.value = defaultRows.value
   cols.value = defaultCols.value
   orderedIndices.value = Array.from({ length: n.value }, (_, i) => i)
+})
+
+// 导入本地图片时 allUrls 增长，把新下标追加到末尾，不动已有顺序
+watch(n, (newN, oldN) => {
+  if (newN <= oldN) return
+  for (let i = oldN; i < newN; i++) {
+    orderedIndices.value.push(i)
+  }
 })
 
 function registerImg(idx: number, el: unknown): void {
@@ -86,6 +96,12 @@ function onDragEnd(): void {
 
 function onImgLoad(): void {
   loadedCount.value++
+}
+
+async function pickLocalImages(): Promise<void> {
+  const picked = await window.imageLibrary.pickLocalImages()
+  if (!picked || picked.length === 0) return
+  localUrls.value.push(...picked)
 }
 
 // --- 导出用 draw ---
@@ -157,6 +173,10 @@ async function exportCollage(): Promise<void> {
       <h3>拼图</h3>
       <p>已选 {{ n }} 张图片（拖拽可调整位置）</p>
 
+      <div class="collage-toolbar">
+        <button class="ghost-button" type="button" @click="pickLocalImages">导入本地图片</button>
+      </div>
+
       <div class="collage-fields">
         <label>
           行
@@ -192,7 +212,7 @@ async function exportCollage(): Promise<void> {
           v-for="(idx, pos) in orderedIndices"
           :key="idx"
           :ref="(el) => registerImg(idx, el)"
-          :src="urls[idx]"
+          :src="allUrls[idx]"
           crossOrigin="anonymous"
           draggable="true"
           class="collage-thumb"
@@ -311,5 +331,8 @@ async function exportCollage(): Promise<void> {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+.collage-toolbar {
+  margin-bottom: 14px;
 }
 </style>

@@ -1,0 +1,98 @@
+<h2>"按时长缩放"的三种布局思路</h2>
+<p class="subtitle">同一个游戏库（比如 #1 玩了 300h，#2 120h，#3 50h，#10 5h…）用三种方式缩放。点击你喜欢的。</p>
+
+<style>
+.mock-collage { background:#0f172a; border:1px solid rgba(148,163,184,.25); border-radius:10px; padding:14px; min-height:200px; }
+.mock-collage .row { display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap; }
+.tile { background:linear-gradient(135deg,#3b82f6,#1e3a8a); border-radius:4px; display:flex; align-items:flex-end; justify-content:center; color:#dbeafe; font-size:10px; font-weight:700; padding:2px; }
+.tile.alt { background:linear-gradient(135deg,#7dd3fc,#0c4a6e); }
+.tile.tiny { background:rgba(125,211,252,.5); }
+.lbl { font-size:11px; color:#94a3b8; margin-top:6px; }
+</style>
+
+<div class="cards">
+
+  <div class="card" data-choice="log" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-collage">
+        <div class="row">
+          <div class="tile" style="width:90px;height:90px;">300h</div>
+          <div class="tile alt" style="width:72px;height:72px;">120h</div>
+          <div class="tile" style="width:60px;height:60px;">80h</div>
+          <div class="tile alt" style="width:52px;height:52px;">50h</div>
+          <div class="tile" style="width:46px;height:46px;">30h</div>
+          <div class="tile alt" style="width:40px;height:40px;">20h</div>
+          <div class="tile" style="width:36px;height:36px;">12h</div>
+          <div class="tile alt" style="width:32px;height:32px;">8h</div>
+          <div class="tile tiny" style="width:28px;height:28px;">5h</div>
+          <div class="tile tiny" style="width:26px;height:26px;">3h</div>
+        </div>
+        <p class="lbl">尺寸随 log(时长) 平滑递减，大小渐变</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 对数平滑缩放</h3>
+      <p>每张封面大小随 log(playtime) 连续变化，从大到小自然过渡。保留所有游戏，视觉上有"瀑布感"。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="tier" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-collage">
+        <div class="row" style="margin-bottom:6px;">
+          <div class="tile" style="width:84px;height:84px;">300h</div>
+          <div class="tile" style="width:84px;height:84px;">120h</div>
+          <div class="tile" style="width:84px;height:84px;">80h</div>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
+          <div class="tile alt" style="width:58px;height:58px;">50h</div>
+          <div class="tile alt" style="width:58px;height:58px;">30h</div>
+          <div class="tile alt" style="width:58px;height:58px;">20h</div>
+          <div class="tile alt" style="width:58px;height:58px;">15h</div>
+        </div>
+        <div class="row">
+          <div class="tile tiny" style="width:36px;height:36px;">8h</div>
+          <div class="tile tiny" style="width:36px;height:36px;">5h</div>
+          <div class="tile tiny" style="width:36px;height:36px;">3h</div>
+          <div class="tile tiny" style="width:36px;height:36px;">2h</div>
+          <div class="tile tiny" style="width:36px;height:36px;">1h</div>
+          <div class="tile tiny" style="width:36px;height:36px;">1h</div>
+        </div>
+        <p class="lbl">按时长分档：XL / L / M / S，同档等大</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 分档缩放</h3>
+      <p>按时长划成 3-4 档（如 &gt;100h=XL，30-100h=L，10-30h=M，&lt;10h=S），同档内等大。整齐有结构，像奖牌榜。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hero" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-collage">
+        <div class="row" style="margin-bottom:6px;">
+          <div class="tile" style="width:150px;height:90px;font-size:14px;">#1 · 300h</div>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
+          <div class="tile alt" style="width:60px;height:60px;">120h</div>
+          <div class="tile alt" style="width:60px;height:60px;">80h</div>
+          <div class="tile alt" style="width:60px;height:60px;">50h</div>
+        </div>
+        <div class="row">
+          <div class="tile tiny" style="width:34px;height:34px;">30h</div>
+          <div class="tile tiny" style="width:34px;height:34px;">20h</div>
+          <div class="tile tiny" style="width:34px;height:34px;">12h</div>
+          <div class="tile tiny" style="width:34px;height:34px;">8h</div>
+          <div class="tile tiny" style="width:34px;height:34px;">5h</div>
+          <div class="tile tiny" style="width:34px;height:34px;">3h</div>
+        </div>
+        <p class="lbl">头号游戏巨大，其余快速缩小</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 头部英雄式</h3>
+      <p>玩得最多的 1-3 个游戏占大块视觉，其余排成小网格。戏剧感强，像杂志封面，但弱化了中段游戏。</p>
+    </div>
+  </div>
+
+</div>

@@ -25,10 +25,28 @@ const tierSizes: Record<Orientation, Record<Tier, number>> = {
   portrait: { xl: 130, l: 95, m: 70, s: 48 },
 }
 
-function coverUrl(appid: number): string {
-  return orientation.value === 'landscape'
-    ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
-    : `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`
+// 竖版优先 library_600x900，失败回退 library_capsule（部分游戏只有后者）
+const PORTRAIT_PRIMARY = 'library_600x900.jpg'
+const PORTRAIT_FALLBACK = 'library_capsule.jpg'
+
+function coverUrl(appid: number, portraitFallback = false): string {
+  if (orientation.value === 'landscape') {
+    return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
+  }
+  const file = portraitFallback ? PORTRAIT_FALLBACK : PORTRAIT_PRIMARY
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/${file}`
+}
+
+function onCoverError(e: Event, game: OwnedGame): void {
+  const img = e.target as HTMLImageElement
+  // 竖版主图失败 → 尝试回退图；回退图也失败 → 显示占位
+  if (orientation.value === 'portrait' && !img.dataset.fallback) {
+    img.dataset.fallback = '1'
+    img.src = coverUrl(game.appid, true)
+    return
+  }
+  img.style.display = 'none'
+  img.parentElement?.classList.add('cover-failed')
 }
 
 function coverWidth(tier: Tier): number {
@@ -75,15 +93,23 @@ function aspectRatio(): number {
 }
 
 async function loadBitmap(appid: number): Promise<ImageBitmap | null> {
-  try {
-    const url = coverUrl(appid)
-    const resp = await fetch(url)
-    if (!resp.ok) return null
-    const blob = await resp.blob()
-    return await createImageBitmap(blob)
-  } catch {
-    return null
+  const tryFetch = async (url: string): Promise<ImageBitmap | null> => {
+    try {
+      const resp = await fetch(url)
+      if (!resp.ok) return null
+      const blob = await resp.blob()
+      return await createImageBitmap(blob)
+    } catch {
+      return null
+    }
   }
+  const primary = await tryFetch(coverUrl(appid))
+  if (primary) return primary
+  // 竖版主图失败，尝试回退
+  if (orientation.value === 'portrait') {
+    return await tryFetch(coverUrl(appid, true))
+  }
+  return null
 }
 
 async function exportPng(): Promise<void> {
@@ -225,7 +251,7 @@ onMounted(() => {
                 :src="coverUrl(game.appid)"
                 :alt="game.name"
                 loading="lazy"
-                @error="(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLElement).parentElement?.classList.add('cover-failed') }"
+                @error="(e) => onCoverError(e, game)"
               />
               <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
               <div class="cover-meta" :class="{ 'meta-mini': tier === 's' }">
@@ -248,7 +274,7 @@ onMounted(() => {
                 :src="coverUrl(game.appid)"
                 :alt="game.name"
                 loading="lazy"
-                @error="(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLElement).parentElement?.classList.add('cover-failed') }"
+                @error="(e) => onCoverError(e, game)"
               />
               <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
             </div>

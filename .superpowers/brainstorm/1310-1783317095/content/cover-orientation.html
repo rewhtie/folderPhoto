@@ -1,0 +1,77 @@
+<h2>封面用哪种方向？</h2>
+<p class="subtitle">分档布局下，竖图和横图视觉差异很大。点击你喜欢的。</p>
+
+<style>
+.mc { background:#0f172a; border:1px solid rgba(148,163,184,.25); border-radius:10px; padding:14px; }
+.mc .tier-row { display:flex; gap:6px; margin-bottom:6px; align-items:flex-end; }
+.t { background:linear-gradient(135deg,#3b82f6,#1e3a8a); border-radius:4px; display:flex; align-items:flex-end; justify-content:center; color:#dbeafe; font-size:9px; font-weight:700; padding:2px; }
+.t.alt { background:linear-gradient(135deg,#7dd3fc,#0c4a6e); }
+.t.tiny { background:rgba(125,211,252,.45); }
+.tl { font-size:10px; color:#7dd3fc; font-weight:700; margin:8px 0 4px; letter-spacing:.08em; }
+</style>
+
+<div class="cards">
+
+  <div class="card" data-choice="portrait" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mc">
+        <div class="tl">XL · &gt;100h</div>
+        <div class="tier-row">
+          <div class="t" style="width:54px;height:81px;">300h</div>
+          <div class="t" style="width:54px;height:81px;">120h</div>
+        </div>
+        <div class="tl">L · 30-100h</div>
+        <div class="tier-row">
+          <div class="t alt" style="width:40px;height:60px;">80h</div>
+          <div class="t alt" style="width:40px;height:60px;">50h</div>
+          <div class="t alt" style="width:40px;height:60px;">30h</div>
+        </div>
+        <div class="tl">S · &lt;30h</div>
+        <div class="tier-row">
+          <div class="t tiny" style="width:26px;height:39px;">12h</div>
+          <div class="t tiny" style="width:26px;height:39px;">8h</div>
+          <div class="t tiny" style="width:26px;height:39px;">5h</div>
+          <div class="t tiny" style="width:26px;height:39px;">3h</div>
+          <div class="t tiny" style="width:26px;height:39px;">1h</div>
+        </div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">600×900 竖图 · 像 Steam 库的"游戏墙"</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>竖版胶囊图</h3>
+      <p>Steam <code>library_600x900.jpg</code>，竖向 2:3。每档一行竖图，像一面游戏墙，沉浸感强。每行能放的少，纵向滚动多。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="landscape" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mc">
+        <div class="tl">XL · &gt;100h</div>
+        <div class="tier-row">
+          <div class="t" style="width:108px;height:50px;">300h</div>
+          <div class="t" style="width:108px;height:50px;">120h</div>
+        </div>
+        <div class="tl">L · 30-100h</div>
+        <div class="tier-row">
+          <div class="t alt" style="width:78px;height:36px;">80h</div>
+          <div class="t alt" style="width:78px;height:36px;">50h</div>
+          <div class="t alt" style="width:78px;height:36px;">30h</div>
+        </div>
+        <div class="tl">S · &lt;30h</div>
+        <div class="tier-row">
+          <div class="t tiny" style="width:50px;height:23px;">12h</div>
+          <div class="t tiny" style="width:50px;height:23px;">8h</div>
+          <div class="t tiny" style="width:50px;height:23px;">5h</div>
+          <div class="t tiny" style="width:50px;height:23px;">3h</div>
+          <div class="t tiny" style="width:50px;height:23px;">1h</div>
+        </div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">460×215 横图 · 紧凑，每行更多</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>横版 Header 图</h3>
+      <p>Steam <code>header.jpg</code>，横向 460×215。每档一行横幅，紧凑能塞更多游戏，像商店页。每行多，纵向滚动少。</p>
+    </div>
+  </div>
+
+</div>

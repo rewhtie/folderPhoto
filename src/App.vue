@@ -1127,9 +1127,9 @@ button:disabled {
 
 .floating-selection {
   position: fixed;
-  top: 20px;
+  top: 60px;
   right: 20px;
-  z-index: 12;
+  z-index: 21;
   margin-bottom: 0;
   background: rgba(23, 32, 51, 0.96);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
