@@ -27,6 +27,7 @@ const selectedPaths = ref<Set<string>>(new Set())
 const activeCollection = ref('全部')
 const isCollectionDialogOpen = ref(false)
 const isCollageDialogOpen = ref(false)
+const collageInitialUrls = ref<string[]>([])
 const isSettingsOpen = ref(false)
 const detailGame = ref<{ appId: string; appName: string } | null>(null)
 const collectionNameInput = ref('')
@@ -47,6 +48,12 @@ const selectedImageUrls = computed(() => {
 
 function openCollageDialog(): void {
   if (selectedPaths.value.size === 0) return
+  collageInitialUrls.value = [...selectedImageUrls.value]
+  isCollageDialogOpen.value = true
+}
+
+function openFreeCollage(): void {
+  collageInitialUrls.value = []
   isCollageDialogOpen.value = true
 }
 
@@ -511,6 +518,7 @@ async function selectDirectory(): Promise<void> {
     <nav class="tab-bar">
       <button :class="{ active: activeTab === 'browser' }" @click="activeTab = 'browser'">图片浏览器</button>
       <button :class="{ active: activeTab === 'career' }" @click="activeTab = 'career'">职业游戏生涯拼图</button>
+      <button @click="openFreeCollage">自由拼图</button>
     </nav>
 
     <div v-show="activeTab === 'browser'">
@@ -795,7 +803,7 @@ async function selectDirectory(): Promise<void> {
 
     <CollageDialog
       v-if="isCollageDialogOpen"
-      :urls="selectedImageUrls"
+      :urls="collageInitialUrls"
       @close="isCollageDialogOpen = false"
     />
 

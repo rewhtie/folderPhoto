@@ -12,7 +12,8 @@
 
 - 本地图片扩展名白名单与扫描器 `IMAGE_EXTENSIONS`（[electron/imageScanner.ts:11](electron/imageScanner.ts#L11)）一致：`jpg, jpeg, png, webp, gif, bmp`。
 - 本地图片只在模态生命周期内有效，关闭即清空，不写盘、不进收藏夹。
-- `openCollageDialog` 的 `selectedPaths.size === 0` 前置校验保持不变（至少选 1 张扫描图才能进拼图）。
+- `openCollageDialog` 的 `selectedPaths.size === 0` 前置校验只用于图片浏览器底部入口；顶部「自由拼图」不要求选择扫描图。
+- 顶部「自由拼图」复用现有 `CollageDialog`，不新建独立拼图组件。
 - 复用 `local-image://` 协议（已 `corsEnabled: true`，[electron/main.ts:55](electron/main.ts#L55)），不为本地图片开新协议或新特例。
 - IPC 命名前缀沿用现有 `collage:` 命名空间。
 
@@ -192,12 +193,48 @@ async function pickLocalImages(): Promise<void> {
 }
 ```
 
-- [ ] **Step 4: 类型检查**
+- [ ] **Step 5: 支持空拼图与首次导入自动布局**
+
+在模板的工具栏之后、`collage-fields` 之前增加：
+```html
+<p v-if="n === 0" class="collage-empty">请导入本地图片开始拼图</p>
+```
+
+导出按钮增加空状态禁用：
+```html
+:disabled="isExporting || n === 0"
+```
+
+把 `watch(n, ...)` 改为：
+```ts
+watch(n, (newN, oldN) => {
+  if (newN <= oldN) return
+  for (let i = oldN; i < newN; i++) {
+    orderedIndices.value.push(i)
+  }
+  if (oldN === 0) {
+    rows.value = defaultRows.value
+    cols.value = defaultCols.value
+  }
+})
+```
+
+在样式中追加：
+```css
+.collage-empty {
+  padding: 24px;
+  border: 1px dashed rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  text-align: center;
+}
+```
+
+- [ ] **Step 6: 类型检查**
 
 Run: `npx vue-tsc --noEmit`
 Expected: 无新增错误。
 
-- [ ] **Step 5: 手动冒烟测试**
+- [ ] **Step 7: 手动冒烟测试**
 
 启动应用（`npm run dev`），扫描一个 librarycache 目录，勾选 ≥1 张扫描图，点「拼图」打开模态：
 
@@ -206,12 +243,88 @@ Expected: 无新增错误。
 3. 调行列/总宽 → 已选图与本地图一起布局；拖拽可把本地图移到前面。
 4. 导出 PNG → 保存的文件同时含扫描图与本地图。
 5. 关闭再重开模态 → 之前导入的本地图片已清空（只剩已选扫描图）。
+6. 通过顶部「自由拼图」打开空模态 → 显示空状态、导出禁用 → 导入第一批本地图后自动计算行列并可导出。
 
 Expected: 全部通过；导出 PNG 无 canvas 跨源污染报错（控制台无 "tainted" 报错）。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/components/CollageDialog.vue
 git commit -m "feat(collage): import local images into collage modal"
+```
+
+---
+
+### Task 4: 顶部导航增加「自由拼图」入口
+
+**Files:**
+- Modify: `src/App.vue`
+
+**Interfaces:**
+- Consumes: `CollageDialog` 支持 `urls: []` 和模态内导入本地图片（Task 3）
+- Produces: 顶部「自由拼图」按钮；普通拼图和自由拼图分别用快照数组打开同一弹窗。
+
+- [ ] **Step 1: 新增拼图初始 URL 状态**
+
+在 `isCollageDialogOpen` 附近新增：
+```ts
+const collageInitialUrls = ref<string[]>([])
+```
+
+- [ ] **Step 2: 修改普通拼图打开函数并新增自由拼图函数**
+
+把现有 `openCollageDialog` 改为：
+```ts
+function openCollageDialog(): void {
+  if (selectedPaths.value.size === 0) return
+  collageInitialUrls.value = [...selectedImageUrls.value]
+  isCollageDialogOpen.value = true
+}
+
+function openFreeCollage(): void {
+  collageInitialUrls.value = []
+  isCollageDialogOpen.value = true
+}
+```
+
+使用快照数组可避免弹窗打开后外部选择状态变化影响当前拼图。
+
+- [ ] **Step 3: 顶部导航新增按钮**
+
+在「职业游戏生涯拼图」按钮之后增加：
+```html
+<button @click="openFreeCollage">自由拼图</button>
+```
+
+该按钮只负责打开模态，不修改 `activeTab`。
+
+- [ ] **Step 4: 拼图组件改用初始快照**
+
+把：
+```html
+:urls="selectedImageUrls"
+```
+改为：
+```html
+:urls="collageInitialUrls"
+```
+
+- [ ] **Step 5: 类型检查**
+
+Run: `npx vue-tsc --noEmit`
+Expected: 无新增错误。
+
+- [ ] **Step 6: 手动验证**
+
+1. 未选择扫描图时点击顶部「自由拼图」→ 打开空拼图模态。
+2. 空模态中导入本地图片 → 图片显示，导出按钮启用。
+3. 选择扫描图后点击底部「拼图」→ 初始显示所选扫描图，仍可追加本地图。
+4. 弹窗打开后清空或改变浏览器选择 → 当前拼图内容不变化（使用打开时快照）。
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/App.vue
+git commit -m "feat(collage): add free collage navigation entry"
 ```

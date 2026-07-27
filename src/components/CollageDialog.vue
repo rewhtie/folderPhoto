@@ -50,6 +50,10 @@ watch(n, (newN, oldN) => {
   for (let i = oldN; i < newN; i++) {
     orderedIndices.value.push(i)
   }
+  if (oldN === 0) {
+    rows.value = defaultRows.value
+    cols.value = defaultCols.value
+  }
 })
 
 function registerImg(idx: number, el: unknown): void {
@@ -177,6 +181,8 @@ async function exportCollage(): Promise<void> {
         <button class="ghost-button" type="button" @click="pickLocalImages">导入本地图片</button>
       </div>
 
+      <p v-if="n === 0" class="collage-empty">请导入本地图片开始拼图</p>
+
       <div class="collage-fields">
         <label>
           行
@@ -234,7 +240,7 @@ async function exportCollage(): Promise<void> {
 
       <div class="collage-actions">
         <button class="ghost-button" type="button" @click="emit('close')">取消</button>
-        <button class="primary-button" type="button" :disabled="isExporting" @click="exportCollage">
+        <button class="primary-button" type="button" :disabled="isExporting || n === 0" @click="exportCollage">
           {{ isExporting ? '导出中…' : '导出' }}
         </button>
       </div>
@@ -334,5 +340,11 @@ async function exportCollage(): Promise<void> {
 }
 .collage-toolbar {
   margin-bottom: 14px;
+}
+.collage-empty {
+  padding: 24px;
+  border: 1px dashed rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  text-align: center;
 }
 </style>
