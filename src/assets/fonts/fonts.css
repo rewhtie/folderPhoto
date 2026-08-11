@@ -1,0 +1,12 @@
+/* 阿里妈妈方圆体 VF Thin —— 本地字体 */
+@font-face {
+  font-family: 'AlimamaFangYuanTi';
+  font-style: normal;
+  /* font-weight: 100; */
+  font-display: swap;
+  src: url('./AlimamaFangYuanTiVF-Thin.woff2') format('woff2'),
+    url('./AlimamaFangYuanTiVF-Thin.woff') format('woff'),
+    url('./AlimamaFangYuanTiVF-Thin-2.ttf');
+
+  /* AlimamaFangYuanTiVF-Thin.ttf 是没有经过处理的，Chrome无法识别，手机能识别 */
+}

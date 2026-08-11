@@ -871,6 +871,7 @@ async function selectDirectory(): Promise<void> {
   color: #e5edf7;
   background: #101827;
   font-family:
+    'AlimamaFangYuanTi',
     Inter,
     'Segoe UI',
     'Microsoft YaHei',
