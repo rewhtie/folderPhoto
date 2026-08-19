@@ -16,15 +16,17 @@ const list = ref<TierList>(emptyTierList())
 const isImporting = ref(false)
 const isExporting = ref(false)
 const errorMessage = ref('')
+const isPoolOpen = ref(false)
+const pyramidEl = ref<HTMLElement | null>(null)
 
-// 每档封面宽（px），金字塔自上而下递减
+// 每档封面宽（px），统一为 NPC 尺寸
 const tierWidths: Record<string, number> = {
-  夯: 200,
-  顶级: 164,
-  人上人: 132,
+  夯: 104,
+  顶级: 104,
+  人上人: 104,
   NPC: 104,
-  拉: 80,
-  pool: 96,
+  拉: 104,
+  pool: 104,
 }
 
 const tierColors: Record<string, string> = {
@@ -49,15 +51,20 @@ function scheduleSave(): void {
 }
 
 onMounted(async () => {
-  list.value = await window.imageLibrary.loadTierList()
-  // 取走浏览器页送来的图片
+  // 先取走 pool 里的图（不依赖持久化），保证「加入评测」或导入的图一定能显示
   const incoming = takeReviewPool()
-  if (incoming.length > 0) {
-    let next = list.value
-    for (const entry of incoming) next = addToPool(next, entry)
-    list.value = next
-    scheduleSave()
+
+  let loaded: TierList
+  try {
+    loaded = await window.imageLibrary.loadTierList()
+  } catch {
+    loaded = emptyTierList()
   }
+
+  let next = loaded
+  for (const entry of incoming) next = addToPool(next, entry)
+  list.value = next
+  if (incoming.length > 0) scheduleSave()
 })
 
 async function importLocalImages(): Promise<void> {
@@ -106,85 +113,30 @@ function onDragEnd(): void {
   dragFrom = null
 }
 
-// --- 导出 PNG ---
-async function loadBitmap(src: string): Promise<ImageBitmap | null> {
-  try {
-    const resp = await fetch(src)
-    if (!resp.ok) return null
-    return await createImageBitmap(await resp.blob())
-  } catch {
-    return null
-  }
-}
+// --- 导出 PNG（DOM 截图：直接截取评分区域，高清） ---
+import { toPng } from 'html-to-image'
 
 async function exportPng(): Promise<void> {
   if (isExporting.value) return
+  if (!pyramidEl.value) return
   isExporting.value = true
   errorMessage.value = ''
   try {
-    const canvasWidth = 1920
-    const padding = 40
-    const rowH = 140
-    const labelH = 40
-    const sections = [...TIER_ORDER, 'pool' as const].filter((t) => list.value[t].length > 0)
+    // 导入的封面若尚未加载完，先等图片就绪再截图
+    await waitImagesLoaded(pyramidEl.value)
 
-    let totalH = padding
-    for (const tier of sections) {
-      totalH += labelH + rowH + 16
-    }
-    totalH += padding
+    const node = pyramidEl.value
+    const pixelRatio = 3
+    const dataUrl = await toPng(node, {
+      pixelRatio,
+      cacheBust: true,
+      backgroundColor: '#101827',
+      width: node.scrollWidth,
+      height: node.scrollHeight,
+    })
 
-    const canvas = document.createElement('canvas')
-    canvas.width = canvasWidth
-    canvas.height = totalH
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.fillStyle = '#101827'
-    ctx.fillRect(0, 0, canvasWidth, totalH)
-
-    let y = padding
-    for (const tier of sections) {
-      const entries = list.value[tier]
-      // 档位标签
-      ctx.fillStyle = tierColors[tier]
-      ctx.fillRect(padding, y, 8, labelH)
-      ctx.fillStyle = tier === 'pool' ? '#94a3b8' : tierColors[tier]
-      ctx.font = 'bold 22px sans-serif'
-      ctx.fillText(`${tierLabel(tier)} · ${entries.length}`, padding + 20, y + 28)
-      y += labelH
-
-      // 封面横排
-      const w = tierWidths[tier]
-      const bitmaps = await Promise.all(entries.map((e) => loadBitmap(e.src)))
-      for (let i = 0; i < entries.length; i++) {
-        const x = padding + i * (w + 10)
-        const bmp = bitmaps[i]
-        if (bmp) {
-          const ratio = bmp.width / bmp.height
-          let sx = 0, sy = 0, sw = bmp.width, sh = bmp.height
-          if (ratio > 460 / 215) {
-            sw = bmp.height * (460 / 215)
-            sx = (bmp.width - sw) / 2
-          } else {
-            sh = bmp.width / (460 / 215)
-            sy = (bmp.height - sh) / 2
-          }
-          ctx.drawImage(bmp, sx, sy, sw, sh, x, y, w, w / (460 / 215))
-        } else {
-          ctx.fillStyle = '#1e293b'
-          ctx.fillRect(x, y, w, w / (460 / 215))
-        }
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'
-        ctx.fillRect(x, y + w / (460 / 215) - 24, w, 24)
-        ctx.fillStyle = '#e2e8f0'
-        ctx.font = 'bold 12px sans-serif'
-        ctx.fillText(entries[i].label.slice(0, 18), x + 6, y + w / (460 / 215) - 12)
-      }
-      y += rowH + 16
-    }
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) return
+    const resp = await fetch(dataUrl)
+    const blob = await resp.blob()
     const buffer = await blob.arrayBuffer()
     await window.imageLibrary.saveCollage(buffer, 'review-rank.png')
   } catch (err) {
@@ -192,6 +144,20 @@ async function exportPng(): Promise<void> {
   } finally {
     isExporting.value = false
   }
+}
+
+function waitImagesLoaded(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'))
+  return Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete) return resolve()
+          img.addEventListener('load', () => resolve(), { once: true })
+          img.addEventListener('error', () => resolve(), { once: true })
+        }),
+    ),
+  ).then(() => undefined)
 }
 </script>
 
@@ -218,56 +184,89 @@ async function exportPng(): Promise<void> {
     <section class="content-panel">
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
-      <div
-        v-for="tier in [...TIER_ORDER, 'pool']"
-        :key="tier"
-        class="tier-row"
-        @dragover="onDragOver"
-        @drop="onDrop(tier, list[tier].length)"
+      <!-- 金字塔：五档纵向，全宽 -->
+      <div ref="pyramidEl" class="pyramid-col">
+        <div
+          v-for="tier in TIER_ORDER"
+          :key="tier"
+          class="tier-row"
+          @dragover="onDragOver"
+          @drop="onDrop(tier, list[tier].length)"
+        >
+          <h2 class="tier-head" :style="{ color: tierColors[tier] }">
+            {{ tierLabel(tier) }} <span class="count">{{ list[tier].length }}</span>
+          </h2>
+          <div class="cover-row">
+            <div
+              v-for="(entry, idx) in list[tier]"
+              :key="entry.id"
+              class="cover"
+              :style="{ width: tierWidths[tier] + 'px' }"
+              draggable="true"
+              @dragstart="onDragStart(tier, idx, $event)"
+              @dragover="(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move' }"
+              @drop="onDrop(tier, idx)"
+              @dragend="onDragEnd"
+            >
+              <img :src="entry.src" :alt="entry.label" loading="lazy" draggable="false" />
+              <div class="cover-meta">{{ entry.label }}</div>
+            </div>
+            <div v-if="list[tier].length === 0" class="empty-hint">拖到这里</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧待分区抽屉 -->
+    <div class="pool-drawer" :class="{ open: isPoolOpen }">
+      <button
+        class="pool-tab"
+        type="button"
+        :title="isPoolOpen ? '收起待分区' : '展开待分区'"
+        @click="isPoolOpen = !isPoolOpen"
       >
-        <h2 class="tier-head" :style="{ color: tierColors[tier] }">
-          {{ tierLabel(tier) }} <span class="count">{{ list[tier].length }}</span>
-        </h2>
-        <div class="cover-row">
+        <span class="pool-tab-text">待分区 {{ list.pool.length }}</span>
+        <span class="pool-tab-arrow">{{ isPoolOpen ? '›' : '‹' }}</span>
+      </button>
+      <aside
+        class="pool-col"
+        @dragover="onDragOver"
+        @drop="onDrop('pool', list.pool.length)"
+      >
+        <div class="pool-covers">
           <div
-            v-for="(entry, idx) in list[tier]"
+            v-for="(entry, idx) in list.pool"
             :key="entry.id"
-            class="cover"
-            :style="{ width: tierWidths[tier] + 'px' }"
+            class="cover pool-cover"
             draggable="true"
-            @dragstart="onDragStart(tier, idx, $event)"
+            @dragstart="onDragStart('pool', idx, $event)"
             @dragover="(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move' }"
-            @drop="onDrop(tier, idx)"
+            @drop="onDrop('pool', idx)"
             @dragend="onDragEnd"
           >
             <img :src="entry.src" :alt="entry.label" loading="lazy" draggable="false" />
             <div class="cover-meta">{{ entry.label }}</div>
           </div>
-          <div v-if="list[tier].length === 0" class="empty-hint">拖到这里</div>
+          <div v-if="list.pool.length === 0" class="empty-hint">拖到这里</div>
         </div>
-      </div>
-    </section>
+      </aside>
+    </div>
   </main>
 </template>
 
 <style scoped>
 .review-shell {
   min-height: 100vh;
-  padding: 40px;
   background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34rem),
     linear-gradient(135deg, #101827 0%, #172033 48%, #0f172a 100%);
 }
-.hero-panel,
-.content-panel {
-  max-width: 1180px;
-  margin: 0 auto;
-}
 .hero-panel {
-  padding: 32px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 24px;
+  padding: 32px 40px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+.content-panel {
+  padding: 24px 40px;
 }
 h1 {
   margin: 0 0 12px;
@@ -301,13 +300,79 @@ h1 {
   opacity: 0.5;
   cursor: wait;
 }
-.content-panel {
-  margin-top: 24px;
+.pyramid-col {
+  min-width: 0;
+}
+
+/* --- 右侧待分区抽屉 --- */
+.pool-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  transform: translateX(calc(100% - 34px));
+  transition: transform 0.22s ease;
+}
+.pool-drawer.open {
+  transform: translateX(0);
+}
+.pool-tab {
+  align-self: center;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 34px;
+  padding: 12px 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #cbd5e1;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+}
+.pool-tab:hover {
+  color: #7dd3fc;
+}
+.pool-tab-text {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.pool-tab-arrow {
+  font-size: 16px;
+}
+.pool-col {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-left: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.96);
+  overflow-y: auto;
+}
+.pool-covers {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+.pool-cover {
+  width: 100%;
 }
 .error-text {
   color: #fca5a5;
 }
 .tier-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 20px;
   padding: 14px 16px;
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -316,10 +381,14 @@ h1 {
 }
 .tier-head {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 10px;
+  justify-content: center;
+  gap: 4px;
+  flex: 0 0 84px;
+  margin: 0;
   font-size: 18px;
+  text-align: center;
 }
 .tier-head .count {
   font-size: 13px;
@@ -331,6 +400,8 @@ h1 {
   align-items: flex-start;
   gap: 10px;
   min-height: 60px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .cover {
   position: relative;
@@ -355,6 +426,7 @@ h1 {
   padding: 3px 6px;
   font-size: 11px;
   color: #e2e8f0;
+  text-align: center;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
   overflow: hidden;
   text-overflow: ellipsis;

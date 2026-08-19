@@ -391,6 +391,31 @@ function toggleSelected(path: string): void {
   selectedPaths.value = next
 }
 
+// 全选当前可见图片（并集追加，不清除已有选中）
+function selectVisibleImages(): void {
+  const next = new Set(selectedPaths.value)
+  for (const image of filteredImages.value) {
+    next.add(image.absolutePath)
+  }
+  selectedPaths.value = next
+}
+
+function onCollectionChipClick(name: string): void {
+  if (activeCollection.value === name) {
+    selectVisibleImages()
+  } else {
+    activeCollection.value = name
+  }
+}
+
+function onGroupChipClick(name: string): void {
+  if (activeGroup.value === name) {
+    selectVisibleImages()
+  } else {
+    activeGroup.value = name
+  }
+}
+
 function clearSelection(): void {
   selectedPaths.value = new Set()
 }
@@ -636,7 +661,7 @@ async function selectDirectory(): Promise<void> {
           <span
             class="chip chip-group"
             :class="{ 'active-chip': activeCollection === '全部' }"
-            @click="activeCollection = '全部'"
+            @click="onCollectionChipClick('全部')"
           >
             全部
           </span>
@@ -646,7 +671,7 @@ async function selectDirectory(): Promise<void> {
             class="chip chip-group"
             :class="{ 'active-chip': activeCollection === name }"
           >
-            <button class="chip-name" type="button" @click="activeCollection = name">
+            <button class="chip-name" type="button" @click="onCollectionChipClick(name)">
               {{ name }} ({{ collections[name]?.length ?? 0 }})
             </button>
             <button
@@ -679,7 +704,7 @@ async function selectDirectory(): Promise<void> {
             class="chip chip-group"
             :class="{ 'active-chip': activeCollection === name }"
           >
-            <button class="chip-name" type="button" @click="activeCollection = name">
+            <button class="chip-name" type="button" @click="onCollectionChipClick(name)">
               {{ name }} ({{ steamCollections[name]?.length ?? 0 }})
             </button>
             <button
@@ -702,7 +727,7 @@ async function selectDirectory(): Promise<void> {
             :class="{ 'active-chip': activeGroup === '全部' }"
             role="tab"
             :aria-selected="activeGroup === '全部'"
-            @click="activeGroup = '全部'"
+            @click="onGroupChipClick('全部')"
           >
             全部 ({{ collectionScopedImages.length }})
           </span>
@@ -713,7 +738,7 @@ async function selectDirectory(): Promise<void> {
             :class="{ 'active-chip': activeGroup === group.name }"
             role="tab"
             :aria-selected="activeGroup === group.name"
-            @click="activeGroup = group.name"
+            @click="onGroupChipClick(group.name)"
           >
             {{ group.name }} ({{ group.count }})
           </span>
@@ -900,6 +925,29 @@ async function selectDirectory(): Promise<void> {
     'Segoe UI',
     'Microsoft YaHei',
     sans-serif;
+}
+
+:global(::-webkit-scrollbar) {
+  width: 10px;
+  height: 10px;
+}
+
+:global(::-webkit-scrollbar-track) {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+:global(::-webkit-scrollbar-thumb) {
+  background: rgba(125, 211, 252, 0.35);
+  border-radius: 5px;
+  border: 2px solid rgba(15, 23, 42, 0.4);
+}
+
+:global(::-webkit-scrollbar-thumb:hover) {
+  background: rgba(125, 211, 252, 0.55);
+}
+
+:global(::-webkit-scrollbar-corner) {
+  background: transparent;
 }
 
 .page-shell {
