@@ -7,6 +7,7 @@ import type { SteamSettings } from './settingsStore.js'
 import type { AchievementResult } from './achievementStore.js'
 import type { CacheIconsResult } from './achievementCache.js'
 import type { OwnedGamesResult } from '../src/shared/ownedGames.js'
+import type { TierList } from '../src/shared/tierList.js'
 
 contextBridge.exposeInMainWorld('imageLibrary', {
   scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult> {
@@ -53,5 +54,11 @@ contextBridge.exposeInMainWorld('imageLibrary', {
   },
   fetchOwnedGames(force?: boolean): Promise<OwnedGamesResult> {
     return ipcRenderer.invoke('owned-games:fetch', force ?? false)
+  },
+  loadTierList(): Promise<TierList> {
+    return ipcRenderer.invoke('tier-list:load')
+  },
+  saveTierList(list: TierList): Promise<void> {
+    return ipcRenderer.invoke('tier-list:save', list)
   },
 })

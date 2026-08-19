@@ -4,6 +4,7 @@
 import type { ScanImagesResult, SelectDirectoryResult } from './shared/imageLibrary'
 import type { Collections } from './shared/collections'
 import type { OwnedGamesResult } from './shared/ownedGames'
+import type { TierList } from './shared/tierList'
 
 interface ExportResult {
   copied: number
@@ -61,6 +62,8 @@ declare global {
       cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
       openAchievementCacheDir(appId: string, gameName: string): Promise<void>
       fetchOwnedGames(force?: boolean): Promise<OwnedGamesResult>
+      loadTierList(): Promise<TierList>
+      saveTierList(list: TierList): Promise<void>
     }
   }
 }
