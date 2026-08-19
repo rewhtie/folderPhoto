@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { scanImages } from './imageScanner.js'
 import { imageSourceUrlToFileUrl, toImageSourceUrl } from './imageProtocol.js'
 import { loadCollections, saveCollections, setCollectionsFilePath } from './collectionsStore.js'
+import { loadTierList, saveTierList, setTierListFilePath } from './tierListStore.js'
 import { loadSettings, saveSettings, setSettingsFilePath } from './settingsStore.js'
 import {
   fetchApiAchievements,
@@ -23,6 +24,7 @@ import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir }
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
 import type { Collections } from '../src/shared/collections.js'
+import type { TierList } from '../src/shared/tierList.js'
 import type { SteamSettings } from './settingsStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -39,6 +41,7 @@ const collectionsDirectory = isPortable
     ? app.getPath('userData')
     : join(__dirname, '..', '..')
 setCollectionsFilePath(join(collectionsDirectory, 'collections.json'))
+setTierListFilePath(join(collectionsDirectory, 'tierList.json'))
 setSettingsFilePath(join(collectionsDirectory, 'settings.json'))
 setAchievementsBaseDir(collectionsDirectory)
 setAchievementCacheBaseDir(collectionsDirectory)
@@ -108,6 +111,14 @@ ipcMain.handle('collections:load', () => {
 
 ipcMain.handle('collections:save', (_event, collections: Collections) => {
   return saveCollections(collections)
+})
+
+ipcMain.handle('tier-list:load', () => {
+  return loadTierList()
+})
+
+ipcMain.handle('tier-list:save', (_event, list: TierList) => {
+  return saveTierList(list)
 })
 
 ipcMain.handle('collections:choose-export-directory', async () => {
