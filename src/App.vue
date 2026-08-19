@@ -74,6 +74,7 @@ function addSelectedToReview(): void {
   addToReviewPool(entries)
   clearSelection()
   showToast(`已把 ${entries.length} 张图加入评测待分区`)
+  activeTab.value = 'review'
 }
 
 async function importSteamCollections(): Promise<void> {
