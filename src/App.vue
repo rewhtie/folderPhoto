@@ -848,12 +848,6 @@ async function selectDirectory(): Promise<void> {
       </div>
     </div>
 
-    <CollageDialog
-      v-if="isCollageDialogOpen"
-      :urls="collageInitialUrls"
-      @close="isCollageDialogOpen = false"
-    />
-
     <SettingsDialog
       v-if="isSettingsOpen"
       @close="isSettingsOpen = false"
@@ -878,6 +872,12 @@ async function selectDirectory(): Promise<void> {
     <CareerCollage v-if="activeTab === 'career'" />
 
     <ReviewRank v-if="activeTab === 'review'" />
+
+    <CollageDialog
+      v-if="isCollageDialogOpen"
+      :urls="collageInitialUrls"
+      @close="isCollageDialogOpen = false"
+    />
   </div>
 </template>
 
