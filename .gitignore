@@ -10,3 +10,4 @@ collections.json
 app-names.json
 owned-games.json
 release/
+.release-token
