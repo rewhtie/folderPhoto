@@ -75,7 +75,7 @@ Create `package.json` with this content:
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "dev:electron": "concurrently -k \"npm run dev\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev:electron": "concurrently -k \"npm run dev\" \"wait-on tcp:54088 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:54088 electron .\"",
     "build": "vue-tsc --noEmit && vite build && tsc -p tsconfig.node.json",
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit"

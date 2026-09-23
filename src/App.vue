@@ -9,12 +9,14 @@ import GameDetail from './components/GameDetail.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import CareerCollage from './components/CareerCollage.vue'
 import ReviewRank from './components/ReviewRank.vue'
+import GameReview from './components/GameReview.vue'
 import { addToReviewPool } from './shared/reviewPool'
+import { selectedGamesForReview, type GameReviewItem } from './shared/gameReview'
 import { tierLabelFromUrl, type TierEntry } from './shared/tierList'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
-const activeTab = ref<'browser' | 'career' | 'review'>('browser')
+const activeTab = ref<'browser' | 'career' | 'review' | 'game-review'>('browser')
 
 const directoryPath = ref(DEFAULT_LIBRARYCACHE_PATH)
 const images = ref<ImageAsset[]>([])
@@ -48,6 +50,18 @@ const selectedImageUrls = computed(() => {
   }
   return urls
 })
+
+const gameReviewItems = ref<GameReviewItem[]>([])
+
+function openGameReview(): void {
+  const games = selectedGamesForReview(images.value, selectedPaths.value)
+  if (games.length === 0) {
+    showToast('选中的图片没有可测评的游戏信息')
+    return
+  }
+  gameReviewItems.value = games
+  activeTab.value = 'game-review'
+}
 
 function openCollageDialog(): void {
   if (selectedPaths.value.size === 0) return
@@ -564,6 +578,7 @@ async function selectDirectory(): Promise<void> {
       <button :class="{ active: activeTab === 'browser' }" @click="activeTab = 'browser'">图片浏览器</button>
       <button :class="{ active: activeTab === 'career' }" @click="activeTab = 'career'">职业游戏生涯拼图</button>
       <button :class="{ active: activeTab === 'review' }" @click="activeTab = 'review'">游戏评测排名</button>
+      <button :class="{ active: activeTab === 'game-review' }" @click="activeTab = 'game-review'">游戏测评</button>
       <button @click="openFreeCollage">自由拼图</button>
     </nav>
 
@@ -802,7 +817,8 @@ async function selectDirectory(): Promise<void> {
         <span>已选 {{ selectedPaths.size }} 张</span>
         <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
         <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
-        <button class="secondary-button" type="button" @click="addSelectedToReview">加入评测</button>
+        <button class="secondary-button" type="button" @click="openGameReview">测评</button>
+        <button class="secondary-button" type="button" @click="addSelectedToReview">加入评测排名</button>
         <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
         <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
       </div>
@@ -872,6 +888,8 @@ async function selectDirectory(): Promise<void> {
     <CareerCollage v-if="activeTab === 'career'" />
 
     <ReviewRank v-if="activeTab === 'review'" />
+
+    <GameReview v-if="activeTab === 'game-review'" :games="gameReviewItems" />
 
     <CollageDialog
       v-if="isCollageDialogOpen"
