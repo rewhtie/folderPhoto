@@ -194,17 +194,17 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  color: #dbeafe;
+  color: var(--text-soft);
   background: transparent;
   font-size: 14px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
 .back-button:hover {
-  border-color: #7dd3fc;
-  color: #7dd3fc;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .back-arrow {
   font-size: 18px;
@@ -218,7 +218,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   margin: 0;
 }
 .detail-appid {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 .detail-section h3 {
@@ -232,9 +232,9 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 .image-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--border-soft);
   border-radius: 18px;
-  background: rgba(15, 23, 42, 0.74);
+  background: var(--panel-background);
 }
 .preview-frame {
   display: flex;
@@ -242,7 +242,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   justify-content: center;
   height: 150px;
   cursor: pointer;
-  background: rgba(2, 6, 23, 0.76);
+  background: var(--image-well-background);
 }
 .preview-frame img {
   max-width: 100%;
@@ -269,7 +269,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   cursor: pointer;
 }
 .selected-card {
-  outline: 2px solid #7dd3fc;
+  outline: 2px solid var(--accent);
 }
 .image-meta {
   display: grid;
@@ -278,7 +278,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 }
 .image-meta strong {
   overflow: hidden;
-  color: #f8fafc;
+  color: var(--text-bright);
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -287,7 +287,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .achievement-bar {
@@ -297,11 +297,11 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   margin-bottom: 16px;
 }
 .achievement-summary {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
 }
 .achievement-error {
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 14px;
   margin: 0 0 16px;
 }
@@ -311,7 +311,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   padding: 6px 14px;
 }
 .cache-msg {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .achievement-grid {
@@ -324,9 +324,9 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   align-items: center;
   gap: 10px;
   padding: 16px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--input-background-soft);
 }
 .achievement-card img,
 .achievement-icon-placeholder {
@@ -335,12 +335,12 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   flex: 0 0 auto;
   border-radius: 8px;
   object-fit: cover;
-  background: #0f172a;
+  background: var(--image-well-background);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .achievement-locked {
   opacity: 0.55;
@@ -358,7 +358,7 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
   font-size: 14px;
 }
 .achievement-desc {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -368,6 +368,6 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 }
 .state-card {
   padding: 24px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 </style>

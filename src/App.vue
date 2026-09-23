@@ -13,10 +13,20 @@ import GameReview from './components/GameReview.vue'
 import { addToReviewPool } from './shared/reviewPool'
 import { selectedGamesForReview, type GameReviewItem } from './shared/gameReview'
 import { tierLabelFromUrl, type TierEntry } from './shared/tierList'
+import { getSavedTheme, nextTheme, saveTheme, type Theme } from './shared/theme'
 
 const DEFAULT_LIBRARYCACHE_PATH = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
 
 const activeTab = ref<'browser' | 'career' | 'review' | 'game-review'>('browser')
+const theme = ref<Theme>(getSavedTheme(window.localStorage))
+
+document.documentElement.dataset.theme = theme.value
+
+function toggleTheme(): void {
+  theme.value = nextTheme(theme.value)
+  document.documentElement.dataset.theme = theme.value
+  saveTheme(theme.value, window.localStorage)
+}
 
 const directoryPath = ref(DEFAULT_LIBRARYCACHE_PATH)
 const images = ref<ImageAsset[]>([])
@@ -580,6 +590,17 @@ async function selectDirectory(): Promise<void> {
       <button :class="{ active: activeTab === 'review' }" @click="activeTab = 'review'">游戏评测排名</button>
       <button :class="{ active: activeTab === 'game-review' }" @click="activeTab = 'game-review'">游戏测评</button>
       <button @click="openFreeCollage">自由拼图</button>
+      <button
+        class="theme-toggle"
+        type="button"
+        :title="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'"
+        :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'"
+        :aria-pressed="theme === 'light'"
+        @click="toggleTheme"
+      >
+        <span class="theme-toggle-icon" aria-hidden="true">{{ theme === 'dark' ? '☀' : '☾' }}</span>
+        <span>{{ theme === 'dark' ? '白天' : '黑夜' }}</span>
+      </button>
     </nav>
 
     <div v-show="activeTab === 'browser'">
@@ -902,6 +923,8 @@ async function selectDirectory(): Promise<void> {
 <style scoped>
 .app-shell {
   min-height: 100vh;
+  color: var(--text-primary);
+  background: var(--app-background);
 }
 .tab-bar {
   position: sticky;
@@ -910,22 +933,44 @@ async function selectDirectory(): Promise<void> {
   display: flex;
   gap: 4px;
   padding: 8px 40px;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  border-bottom: 1px solid var(--border);
+  background: var(--nav-background);
+  backdrop-filter: blur(14px);
 }
 .tab-bar button {
   padding: 8px 18px;
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
 }
 .tab-bar button.active {
-  background: rgba(125, 211, 252, 0.18);
-  color: #7dd3fc;
+  color: var(--accent);
+  background: var(--accent-background);
+}
+.tab-bar .theme-toggle {
+  display: inline-flex;
+  min-width: 92px;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--accent-border);
+  color: var(--text-soft);
+  background: var(--accent-background-soft);
+}
+.tab-bar .theme-toggle:hover,
+.tab-bar .theme-toggle:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}
+.theme-toggle-icon {
+  font-size: 17px;
+  line-height: 1;
 }
 :global(*) {
   box-sizing: border-box;
@@ -935,8 +980,8 @@ async function selectDirectory(): Promise<void> {
   margin: 0;
   min-width: 900px;
   min-height: 100vh;
-  color: #e5edf7;
-  background: #101827;
+  color: var(--text-primary);
+  background: var(--app-background);
   font-family:
     'AlimamaFangYuanTi',
     Inter,
@@ -951,17 +996,17 @@ async function selectDirectory(): Promise<void> {
 }
 
 :global(::-webkit-scrollbar-track) {
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--scrollbar-track);
 }
 
 :global(::-webkit-scrollbar-thumb) {
-  background: rgba(125, 211, 252, 0.35);
+  background: var(--scrollbar-thumb);
   border-radius: 5px;
-  border: 2px solid rgba(15, 23, 42, 0.4);
+  border: 2px solid var(--scrollbar-track);
 }
 
 :global(::-webkit-scrollbar-thumb:hover) {
-  background: rgba(125, 211, 252, 0.55);
+  background: var(--scrollbar-thumb-hover);
 }
 
 :global(::-webkit-scrollbar-corner) {
@@ -972,8 +1017,7 @@ async function selectDirectory(): Promise<void> {
   min-height: 100vh;
   padding: 40px;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34rem),
-    linear-gradient(135deg, #101827 0%, #172033 48%, #0f172a 100%);
+    var(--page-background);
 }
 
 .hero-panel,
@@ -984,15 +1028,15 @@ async function selectDirectory(): Promise<void> {
 
 .hero-panel {
   padding: 32px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--border);
   border-radius: 24px;
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  background: var(--panel-background);
+  box-shadow: var(--shadow-panel);
 }
 
 .eyebrow {
   margin: 0 0 10px;
-  color: #93c5fd;
+  color: var(--accent-soft);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -1012,7 +1056,7 @@ h1 {
 
 .description {
   max-width: 720px;
-  color: #b6c3d4;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
@@ -1023,7 +1067,7 @@ h1 {
 .path-form label {
   display: block;
   margin-bottom: 10px;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-weight: 700;
 }
 
@@ -1037,34 +1081,34 @@ input {
   flex: 1;
   min-width: 0;
   padding: 14px 16px;
-  border: 1px solid rgba(148, 163, 184, 0.34);
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
-  color: #f8fafc;
-  background: rgba(15, 23, 42, 0.86);
+  color: var(--text-bright);
+  background: var(--input-background);
   font-size: 15px;
   outline: none;
 }
 
 input:focus {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
 button {
   padding: 11px 22px;
   border: 0;
   border-radius: 14px;
-  color: #082f49;
-  background: #7dd3fc;
+  color: var(--accent-text);
+  background: var(--accent);
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
 }
 
 .secondary-button {
-  color: #dbeafe;
-  background: rgba(59, 130, 246, 0.22);
-  border: 1px solid rgba(147, 197, 253, 0.34);
+  color: var(--text-soft);
+  background: var(--accent-background);
+  border: 1px solid var(--accent-border);
 }
 
 button:disabled {
@@ -1078,21 +1122,21 @@ button:disabled {
 
 .state-card {
   padding: 28px;
-  border: 1px dashed rgba(148, 163, 184, 0.34);
+  border: 1px dashed var(--border-strong);
   border-radius: 20px;
-  color: #cbd5e1;
-  background: rgba(15, 23, 42, 0.58);
+  color: var(--text-soft);
+  background: var(--panel-background-soft);
   text-align: center;
 }
 
 .error-state {
-  border-color: rgba(248, 113, 113, 0.52);
-  color: #fecaca;
-  background: rgba(127, 29, 29, 0.24);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+  background: var(--danger-background);
 }
 
 .muted-state {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .result-header {
@@ -1107,7 +1151,7 @@ button:disabled {
 }
 
 .result-header span {
-  color: #93c5fd;
+  color: var(--accent-soft);
   font-weight: 800;
 }
 
@@ -1125,7 +1169,7 @@ button:disabled {
 }
 
 .collection-label {
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-weight: 700;
 }
 
@@ -1134,10 +1178,10 @@ button:disabled {
   align-items: center;
   padding: 8px 12px;
   cursor: pointer;
-  border: 1px solid rgba(147, 197, 253, 0.28);
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
-  color: #dbeafe;
-  background: rgba(59, 130, 246, 0.14);
+  color: var(--text-soft);
+  background: var(--accent-background-soft);
   font-size: 14px;
   font-weight: 700;
 }
@@ -1166,7 +1210,7 @@ button:disabled {
   border-radius: 50%;
   font-size: 12px;
   background: rgba(8, 47, 73, 0.25);
-  color: #082f49;
+  color: var(--accent-text);
 }
 
 .chip-delete {
@@ -1178,17 +1222,17 @@ button:disabled {
   padding: 0;
   border-radius: 50%;
   font-size: 12px;
-  background: rgba(127, 29, 29, 0.5);
-  color: #fecaca;
+  background: var(--danger-control-background);
+  color: var(--danger-control-text);
 }
 
 .active-chip {
-  color: #082f49;
-  background: #7dd3fc;
+  color: var(--accent-text);
+  background: var(--accent);
 }
 
 .active-chip .chip-name {
-  color: #082f49;
+  color: var(--accent-text);
 }
 
 .selection-bar {
@@ -1197,10 +1241,10 @@ button:disabled {
   gap: 10px;
   margin-bottom: 16px;
   padding: 10px 14px;
-  border: 1px solid rgba(125, 211, 252, 0.4);
+  border: 1px solid var(--accent-border);
   border-radius: 14px;
-  background: rgba(59, 130, 246, 0.16);
-  color: #e2e8f0;
+  background: var(--accent-background);
+  color: var(--text-primary);
 }
 
 .selection-bar button {
@@ -1217,11 +1261,11 @@ button:disabled {
   z-index: 20;
   padding: 12px 22px;
   border-radius: 12px;
-  background: rgba(23, 32, 51, 0.97);
-  border: 1px solid rgba(125, 211, 252, 0.4);
-  color: #e2e8f0;
+  background: var(--floating-background);
+  border: 1px solid var(--accent-border);
+  color: var(--text-primary);
   font-size: 14px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-floating);
 }
 
 .floating-selection {
@@ -1230,8 +1274,8 @@ button:disabled {
   right: 20px;
   z-index: 21;
   margin-bottom: 0;
-  background: rgba(23, 32, 51, 0.96);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  background: var(--floating-background);
+  box-shadow: var(--shadow-floating);
 }
 
 .floating-controls {
@@ -1250,14 +1294,14 @@ button:disabled {
   padding: 0;
   border-radius: 50%;
   font-size: 20px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-floating);
 }
 
 .ghost-button {
   padding: 8px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  color: #dbeafe;
+  color: var(--text-soft);
   background: transparent;
 }
 
@@ -1267,7 +1311,7 @@ button:disabled {
 }
 
 .selected-card {
-  outline: 2px solid #7dd3fc;
+  outline: 2px solid var(--accent);
 }
 
 .select-checkbox {
@@ -1298,17 +1342,17 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(2, 6, 23, 0.66);
+  background: var(--backdrop);
 }
 
 .dialog {
   width: 380px;
   max-width: 90vw;
   padding: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--border);
   border-radius: 18px;
-  background: #172033;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  background: var(--panel-background-solid);
+  box-shadow: var(--shadow-dialog);
 }
 
 .dialog h3 {
@@ -1317,7 +1361,7 @@ button:disabled {
 
 .dialog p {
   margin: 0 0 16px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -1332,7 +1376,7 @@ button:disabled {
 
 .picker-label {
   margin: 0 0 10px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -1351,10 +1395,10 @@ button:disabled {
   justify-content: space-between;
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.6);
-  color: #e2e8f0;
+  background: var(--input-background-soft);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1362,13 +1406,13 @@ button:disabled {
 }
 
 .picker-item:hover {
-  border-color: rgba(125, 211, 252, 0.55);
-  background: rgba(30, 41, 59, 0.8);
+  border-color: var(--accent);
+  background: var(--table-header-background);
 }
 
 .picker-item-active {
-  border-color: #7dd3fc;
-  background: rgba(125, 211, 252, 0.18);
+  border-color: var(--accent);
+  background: var(--accent-background);
 }
 
 .picker-name {
@@ -1383,7 +1427,7 @@ button:disabled {
   padding: 2px 10px;
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.28);
-  color: #dbeafe;
+  color: var(--text-soft);
   font-size: 12px;
 }
 
@@ -1403,9 +1447,9 @@ button:disabled {
 .image-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--border-soft);
   border-radius: 18px;
-  background: rgba(15, 23, 42, 0.74);
+  background: var(--panel-background);
 }
 
 .icon-button {
@@ -1416,14 +1460,14 @@ button:disabled {
   width: 44px;
   padding: 9px 15px;
   border-radius: 14px;
-  background: rgba(59, 130, 246, 0.22);
-  border: 1px solid rgba(147, 197, 253, 0.34);
-  color: #dbeafe;
+  background: var(--accent-background);
+  border: 1px solid var(--accent-border);
+  color: var(--text-soft);
   font-size: 18px;
   cursor: pointer;
 }
 .icon-button:hover {
-  color: #7dd3fc;
+  color: var(--accent);
 }
 
 .preview-frame {
@@ -1431,7 +1475,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   height: 150px;
-  background: rgba(2, 6, 23, 0.76);
+  background: var(--image-well-background);
 }
 
 .preview-frame img {
@@ -1448,14 +1492,14 @@ button:disabled {
 
 .image-meta strong {
   overflow: hidden;
-  color: #f8fafc;
+  color: var(--text-bright);
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .image-meta span {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -1463,7 +1507,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -1471,7 +1515,7 @@ button:disabled {
   padding: 0;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 15px;
   cursor: pointer;
   opacity: 0.6;
@@ -1479,7 +1523,7 @@ button:disabled {
 }
 .detail-link:hover {
   opacity: 1;
-  color: #7dd3fc;
+  color: var(--accent);
 }
 
 .dlc-toggle {
@@ -1487,7 +1531,7 @@ button:disabled {
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
-  color: #cbd5e1;
+  color: var(--text-soft);
   cursor: pointer;
   font-size: 14px;
 }

@@ -30,12 +30,12 @@ const tierWidths: Record<string, number> = {
 }
 
 const tierColors: Record<string, string> = {
-  夯: '#7dd3fc',
-  顶级: '#a5b4fc',
-  人上人: '#fcd34d',
-  NPC: '#fb923c',
-  拉: '#f87171',
-  pool: '#94a3b8',
+  夯: 'var(--accent)',
+  顶级: 'var(--tier-top)',
+  人上人: 'var(--tier-elite)',
+  NPC: 'var(--tier-npc)',
+  拉: 'var(--tier-low)',
+  pool: 'var(--text-muted)',
 }
 
 function tierLabel(tier: string): string {
@@ -257,13 +257,12 @@ function waitImagesLoaded(root: HTMLElement): Promise<void> {
 <style scoped>
 .review-shell {
   min-height: 100vh;
-  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34rem),
-    linear-gradient(135deg, #101827 0%, #172033 48%, #0f172a 100%);
+  background: var(--page-background);
 }
 .hero-panel {
   padding: 32px 40px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.78);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-background);
 }
 .content-panel {
   padding: 24px 40px;
@@ -274,7 +273,7 @@ h1 {
 }
 .description {
   margin: 0;
-  color: #b6c3d4;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 .review-controls {
@@ -286,15 +285,15 @@ h1 {
   padding: 8px 18px;
   border: 0;
   border-radius: 12px;
-  background: #7dd3fc;
-  color: #082f49;
+  background: var(--accent);
+  color: var(--accent-text);
   font-weight: 800;
   cursor: pointer;
 }
 .review-controls button.secondary {
-  background: rgba(59, 130, 246, 0.22);
-  border: 1px solid rgba(147, 197, 253, 0.34);
-  color: #dbeafe;
+  background: var(--accent-background);
+  border: 1px solid var(--accent-border);
+  color: var(--text-soft);
 }
 .review-controls button:disabled {
   opacity: 0.5;
@@ -328,16 +327,16 @@ h1 {
   gap: 10px;
   width: 34px;
   padding: 12px 0;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--border);
   border-right: 0;
   border-radius: 12px 0 0 12px;
-  background: rgba(15, 23, 42, 0.92);
-  color: #cbd5e1;
+  background: var(--nav-background);
+  color: var(--text-soft);
   cursor: pointer;
   writing-mode: vertical-rl;
 }
 .pool-tab:hover {
-  color: #7dd3fc;
+  color: var(--accent);
 }
 .pool-tab-text {
   font-size: 14px;
@@ -352,8 +351,8 @@ h1 {
   display: flex;
   flex-direction: column;
   padding: 16px;
-  border-left: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.96);
+  border-left: 1px solid var(--border);
+  background: var(--nav-background);
   overflow-y: auto;
 }
 .pool-covers {
@@ -367,7 +366,7 @@ h1 {
   width: 100%;
 }
 .error-text {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 .tier-row {
   display: flex;
@@ -375,9 +374,9 @@ h1 {
   gap: 16px;
   margin-bottom: 20px;
   padding: 14px 16px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--border-soft);
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--row-background);
 }
 .tier-head {
   display: flex;
@@ -392,7 +391,7 @@ h1 {
 }
 .tier-head .count {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .cover-row {
   display: flex;
@@ -407,7 +406,7 @@ h1 {
   position: relative;
   border-radius: 8px;
   overflow: hidden;
-  background: #0f172a;
+  background: var(--image-well-background);
   cursor: grab;
 }
 .cover:active {
@@ -425,7 +424,7 @@ h1 {
   right: 0;
   padding: 3px 6px;
   font-size: 11px;
-  color: #e2e8f0;
+  color: var(--image-overlay-text);
   text-align: center;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
   overflow: hidden;
@@ -434,7 +433,7 @@ h1 {
 }
 .empty-hint {
   align-self: center;
-  color: #475569;
+  color: var(--text-faint);
   font-size: 13px;
 }
 </style>

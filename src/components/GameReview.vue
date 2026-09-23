@@ -38,8 +38,7 @@ defineProps<{
   min-height: 100vh;
   padding: 40px;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34rem),
-    linear-gradient(135deg, #101827 0%, #172033 48%, #0f172a 100%);
+    var(--page-background);
 }
 
 .review-header,
@@ -50,9 +49,9 @@ defineProps<{
 
 .review-header {
   padding: 32px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--border);
   border-radius: 24px;
-  background: rgba(15, 23, 42, 0.78);
+  background: var(--panel-background);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
 }
 
@@ -63,7 +62,7 @@ defineProps<{
 
 .review-header p {
   margin: 0;
-  color: #b6c3d4;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
@@ -81,7 +80,7 @@ defineProps<{
   display: flex;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.74);
 }
@@ -92,7 +91,7 @@ defineProps<{
   align-items: center;
   justify-content: center;
   min-height: 90px;
-  background: rgba(2, 6, 23, 0.76);
+  background: var(--image-well-background);
 }
 
 .cover-frame img {
@@ -113,23 +112,23 @@ defineProps<{
 .game-info h2 {
   overflow: hidden;
   margin: 0;
-  color: #f8fafc;
+  color: var(--text-bright);
   font-size: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .game-info span {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .empty-state {
   padding: 32px;
-  border: 1px dashed rgba(148, 163, 184, 0.34);
+  border: 1px dashed var(--border-strong);
   border-radius: 20px;
-  color: #94a3b8;
-  background: rgba(15, 23, 42, 0.58);
+  color: var(--text-muted);
+  background: var(--panel-background-soft);
   text-align: center;
 }
 

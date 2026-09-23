@@ -66,23 +66,23 @@ async function save(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(2, 6, 23, 0.66);
+  background: var(--backdrop);
 }
 .settings-dialog {
   width: 420px;
   max-width: 92vw;
   padding: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--border);
   border-radius: 18px;
-  background: #172033;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  background: var(--panel-background-solid);
+  box-shadow: var(--shadow-dialog);
 }
 .settings-dialog h3 {
   margin: 0 0 8px;
 }
 .settings-dialog p {
   margin: 0 0 18px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
 }
 .settings-label {
@@ -90,25 +90,25 @@ async function save(): Promise<void> {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 16px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 .settings-input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
-  color: #e2e8f0;
+  background: var(--input-background-soft);
+  color: var(--text-primary);
   font-size: 14px;
 }
 .settings-hint {
-  color: #64748b;
+  color: var(--text-faint);
   font-size: 12px;
   margin: 0 0 16px;
 }
 .settings-hint a {
-  color: #7dd3fc;
+  color: var(--accent);
 }
 .settings-actions {
   display: flex;
@@ -117,7 +117,7 @@ async function save(): Promise<void> {
   gap: 10px;
 }
 .settings-saved {
-  color: #86efac;
+  color: var(--success-text);
   font-size: 13px;
   margin-right: auto;
 }

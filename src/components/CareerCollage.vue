@@ -290,8 +290,7 @@ onMounted(() => {
   min-height: 100vh;
   padding: 40px;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 34rem),
-    linear-gradient(135deg, #101827 0%, #172033 48%, #0f172a 100%);
+    var(--page-background);
 }
 .hero-panel,
 .content-panel {
@@ -300,10 +299,10 @@ onMounted(() => {
 }
 .hero-panel {
   padding: 32px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--border);
   border-radius: 24px;
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  background: var(--panel-background);
+  box-shadow: var(--shadow-panel);
 }
 h1 {
   margin: 0 0 12px;
@@ -311,7 +310,7 @@ h1 {
 }
 .description {
   max-width: 720px;
-  color: #b6c3d4;
+  color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
 }
@@ -323,7 +322,7 @@ h1 {
 }
 .toggle-group {
   display: flex;
-  border: 1px solid rgba(148, 163, 184, 0.34);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -331,20 +330,20 @@ h1 {
   padding: 8px 16px;
   border: 0;
   background: transparent;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-weight: 700;
   cursor: pointer;
 }
 .toggle-group button.active {
-  background: rgba(125, 211, 252, 0.2);
-  color: #7dd3fc;
+  background: var(--accent-background);
+  color: var(--accent);
 }
 .career-controls .secondary-button {
   padding: 8px 16px;
-  border: 1px solid rgba(147, 197, 253, 0.34);
+  border: 1px solid var(--accent-border);
   border-radius: 12px;
-  background: rgba(59, 130, 246, 0.22);
-  color: #dbeafe;
+  background: var(--accent-background);
+  color: var(--text-soft);
   font-weight: 700;
   cursor: pointer;
 }
@@ -353,7 +352,7 @@ h1 {
   cursor: wait;
 }
 .stats {
-  color: #93c5fd;
+  color: var(--accent-soft);
   font-weight: 700;
 }
 .content-panel {
@@ -361,16 +360,16 @@ h1 {
 }
 .state-card {
   padding: 28px;
-  border: 1px dashed rgba(148, 163, 184, 0.34);
+  border: 1px dashed var(--border-strong);
   border-radius: 20px;
-  color: #cbd5e1;
-  background: rgba(15, 23, 42, 0.58);
+  color: var(--text-soft);
+  background: var(--panel-background-soft);
   text-align: center;
 }
 .error-state {
-  border-color: rgba(248, 113, 113, 0.52);
-  color: #fecaca;
-  background: rgba(127, 29, 29, 0.24);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+  background: var(--danger-background);
 }
 .tier-block {
   margin-bottom: 32px;
@@ -378,7 +377,7 @@ h1 {
 .tier-label {
   margin: 0 0 14px;
   font-size: 18px;
-  color: #7dd3fc;
+  color: var(--accent);
 }
 .cover-row {
   display: flex;
@@ -389,7 +388,7 @@ h1 {
   position: relative;
   border-radius: 8px;
   overflow: hidden;
-  background: #0f172a;
+  background: var(--image-well-background);
 }
 .cover img {
   display: block;
@@ -407,7 +406,7 @@ h1 {
   justify-content: center;
   padding: 4px;
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--text-muted);
   text-align: center;
   word-break: break-all;
 }
@@ -418,7 +417,7 @@ h1 {
   right: 0;
   padding: 4px 6px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
-  color: #e2e8f0;
+  color: var(--image-overlay-text);
 }
 .cover-meta strong {
   display: block;
@@ -429,7 +428,7 @@ h1 {
 }
 .cover-meta span {
   font-size: 10px;
-  color: #7dd3fc;
+  color: var(--image-overlay-accent);
 }
 .meta-mini strong {
   font-size: 9px;
@@ -441,7 +440,7 @@ h1 {
   padding: 2px 4px;
 }
 .tier-label-family {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .cover-family {
   opacity: 0.7;
