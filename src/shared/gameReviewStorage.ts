@@ -15,6 +15,7 @@ export interface StoredGameReview extends GameReviewDraft {
 type ReviewStorage = Pick<Storage, 'getItem' | 'setItem'>
 
 const STORAGE_KEY = 'steam-image-browser-game-review-drafts'
+const ORDER_STORAGE_KEY = 'steam-image-browser-game-review-order'
 const STORAGE_VERSION = 2
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,6 +98,24 @@ export function mergeGamesWithStoredReviews(
       : [{ appId, appName: review.appName, coverUrl: '' }],
   )
   return [...currentGames, ...historicalGames]
+}
+
+export function loadGameReviewOrder(storage: ReviewStorage): string[] {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(ORDER_STORAGE_KEY) ?? 'null')
+    if (!Array.isArray(value)) return []
+    return value.filter((appId): appId is string => typeof appId === 'string' && appId.length > 0)
+  } catch {
+    return []
+  }
+}
+
+export function saveGameReviewOrder(storage: ReviewStorage, order: string[]): void {
+  try {
+    storage.setItem(ORDER_STORAGE_KEY, JSON.stringify([...new Set(order)]))
+  } catch {
+    // localStorage may be unavailable or full; sorting should continue in memory.
+  }
 }
 
 export function saveGameReviews(

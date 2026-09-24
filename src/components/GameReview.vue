@@ -3,8 +3,10 @@ import { toPng } from 'html-to-image'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { GameReviewItem } from '../shared/gameReview'
 import {
+  loadGameReviewOrder,
   loadGameReviews,
   mergeGamesWithStoredReviews,
+  saveGameReviewOrder,
   saveGameReviews,
   type GameReviewDraft,
   type StoredGameReview,
@@ -55,7 +57,7 @@ const gameNameQuery = ref('')
 const pageSizeOptions = [5, 10, 20, 100]
 const pageSize = ref(10)
 const currentPage = ref(1)
-const gameOrder = ref<string[]>([])
+const gameOrder = ref<string[]>(loadGameReviewOrder(window.localStorage))
 const tableEl = ref<HTMLElement | null>(null)
 const isExporting = ref(false)
 const exportError = ref('')
@@ -83,6 +85,7 @@ watch(
       ...retainedIds,
       ...games.map((game) => game.appId).filter((appId) => !retainedSet.has(appId)),
     ]
+    saveGameReviewOrder(window.localStorage, gameOrder.value)
   },
   { immediate: true },
 )
@@ -113,12 +116,23 @@ function toggleReviewBadge(appId: string): void {
   reviewBadgeStyles[appId] = nextBadge.id
 }
 
+function normalizeGameTypeIds(types: string[]): string[] {
+  const typeIds = new Set<string>()
+
+  for (const type of types) {
+    const typeId = typeAliases.get(type)
+    if (typeId) typeIds.add(typeId)
+  }
+
+  return [...typeIds]
+}
+
 function newReviewDraft(appId?: string): GameReviewDraft {
   const savedDraft = appId ? savedReviews[appId] : undefined
   if (savedDraft) {
     return {
       ...savedDraft,
-      type: [...savedDraft.type],
+      type: normalizeGameTypeIds(savedDraft.type),
     }
   }
 
@@ -279,6 +293,7 @@ function applyReorder(): void {
   if (targetIndex < 0) return
   orderedIds.splice(targetIndex + (dropTarget.value.position === 'after' ? 1 : 0), 0, movedId)
   gameOrder.value = orderedIds
+  saveGameReviewOrder(window.localStorage, orderedIds)
 
   const gamesById = new Map(props.games.map((game) => [game.appId, game]))
   emit(
@@ -422,38 +437,58 @@ function toggleGameType(appId: string, type: string): void {
   }
 }
 
-const typeColors: Record<string, string> = {
-  黄油: '#ffcfdf',
-  Galgame: '#f472b6',
-  恐怖游戏: '#dc2626',
-  RPG: '#8b5cf6',
-  JRPG: '#ec4899',
-  类魂: '#222831',
-  肉鸽: '#c084fc',
-  卡牌: '#fbbf24',
-  建造经营: '#9896f1',
-  SLG: '#ff165d',
-  塔防: '#6639a6',
-  休闲: '#a5dee5',
-  解谜: '#60a5fa',
-  类银河恶魔城: '#a8e6cf',
-  弹幕: '#ffd3b6',
-  横版闯关: '#f87171',
-  平台跳跃: '#67e8f9',
-  开放世界: '#5eead4',
-  箱庭地图: '#ff9a8b',
-  联机: '#86efac',
-  推箱子: '#d6b978',
-  动作游戏: '#112d4e',
-  射击游戏: '#38bdf8',
-  Meta: '#f59e0b',
-  回合制: '#14b8a6',
-  视觉小说: '#fc5185'
+interface GameTypeDefinition {
+  label: string
+  color: string
+  aliases?: string[]
 }
-const typeOptions = Object.keys(typeColors)
 
-function typeStyle(type: string): { color?: string } {
-  return { color: typeColors[type] }
+const gameTypes: Record<string, GameTypeDefinition> = {
+  butter: { label: '黄油', color: '#ffcfdf' },
+  galgame: { label: 'Galgame', color: '#f472b6' },
+  horror: { label: '恐怖游戏', color: '#dc2626' },
+  rpg: { label: 'RPG', color: '#8b5cf6' },
+  jrpg: { label: 'JRPG', color: '#ec4899' },
+  soulslike: { label: '类魂', color: '#222831' },
+  roguelike: { label: '肉鸽', color: '#c084fc' },
+  card: { label: '卡牌', color: '#fbbf24' },
+  management: { label: '建造经营', color: '#9896f1', aliases: ['养成经营'] },
+  slg: { label: 'SLG', color: '#ff165d', aliases: ['SLG养成'] },
+  towerDefense: { label: '塔防', color: '#6639a6' },
+  casual: { label: '休闲', color: '#a5dee5' },
+  puzzle: { label: '解谜', color: '#60a5fa' },
+  metroidvania: { label: '类银河恶魔城', color: '#a8e6cf' },
+  bulletHell: { label: '弹幕', color: '#ffd3b6' },
+  sideScroller: { label: '横版闯关', color: '#f87171' },
+  platformer: { label: '平台跳跃', color: '#67e8f9' },
+  openWorld: { label: '开放世界', color: '#5eead4' },
+  hakoniwa: { label: '箱庭地图', color: '#ff9a8b', aliases: ['箱体地图'] },
+  multiplayer: { label: '联机', color: '#86efac' },
+  sokoban: { label: '推箱子', color: '#d6b978' },
+  action: { label: '动作游戏', color: '#112d4e' },
+  shooter: { label: '射击游戏', color: '#38bdf8' },
+  meta: { label: 'Meta', color: '#f59e0b' },
+  turnBased: { label: '回合制', color: '#14b8a6' },
+  visualNovel: { label: '视觉小说', color: '#fc5185' },
+}
+
+const typeOptions = Object.entries(gameTypes).map(([id, definition]) => ({
+  id,
+  ...definition,
+}))
+const typeAliases = new Map<string, string>()
+for (const type of typeOptions) {
+  typeAliases.set(type.id, type.id)
+  typeAliases.set(type.label, type.id)
+  for (const alias of type.aliases ?? []) typeAliases.set(alias, type.id)
+}
+
+function typeLabel(typeId: string): string {
+  return gameTypes[typeId]?.label ?? typeId
+}
+
+function typeStyle(typeId: string): { color?: string } {
+  return { color: gameTypes[typeId]?.color }
 }
 
 function toggleRecommendationMenu(appId: string, event: MouseEvent): void {
@@ -750,15 +785,15 @@ onBeforeUnmount(() => {
             <div class="filter-options">
               <button
                 v-for="type in typeOptions"
-                :key="type"
+                :key="type.id"
                 class="filter-chip type-filter-chip"
-                :class="{ 'is-selected': selectedTypeFilters.includes(type) }"
-                :style="typeStyle(type)"
+                :class="{ 'is-selected': selectedTypeFilters.includes(type.id) }"
+                :style="typeStyle(type.id)"
                 type="button"
-                :aria-pressed="selectedTypeFilters.includes(type)"
-                @click="toggleFilter(selectedTypeFilters, type)"
+                :aria-pressed="selectedTypeFilters.includes(type.id)"
+                @click="toggleFilter(selectedTypeFilters, type.id)"
               >
-                {{ type }}
+                {{ type.label }}
               </button>
             </div>
           </div>
@@ -914,7 +949,7 @@ onBeforeUnmount(() => {
                         class="type-label"
                         :style="typeStyle(type)"
                       >
-                        {{ type }}
+                        {{ typeLabel(type) }}
                       </span>
                     </span>
                   </button>
@@ -1102,16 +1137,16 @@ onBeforeUnmount(() => {
       >
         <button
           v-for="type in typeOptions"
-          :key="type"
+          :key="type.id"
           class="type-option"
-          :style="typeStyle(type)"
+          :style="typeStyle(type.id)"
           type="button"
           role="option"
-          :aria-selected="drafts[typeMenu.appId].type.includes(type)"
-          @click="toggleGameType(typeMenu.appId, type)"
+          :aria-selected="drafts[typeMenu.appId].type.includes(type.id)"
+          @click="toggleGameType(typeMenu.appId, type.id)"
         >
-          <span>{{ type }}</span>
-          <span v-if="drafts[typeMenu.appId].type.includes(type)" class="type-check">✓</span>
+          <span>{{ type.label }}</span>
+          <span v-if="drafts[typeMenu.appId].type.includes(type.id)" class="type-check">✓</span>
         </button>
       </div>
       <div
