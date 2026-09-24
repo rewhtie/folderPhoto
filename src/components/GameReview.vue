@@ -1514,7 +1514,7 @@ onBeforeUnmount(() => {
 
 .table-scroll {
   width: 100%;
-  padding-right: 22px;
+  padding-right: 12px;
   overflow-x: auto;
   box-sizing: content-box;
   background: transparent
