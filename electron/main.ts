@@ -226,6 +226,8 @@ ipcMain.handle('owned-games:fetch', async (_event, force?: boolean) => {
   if (!force) {
     const cached = await loadCachedOwnedGames()
     if (cached) {
+      if (!settings.steamId) return { games: cached }
+
       const localPlaytimes = await loadLocalPlaytimes(defaultLibraryCache, settings.steamId)
       const games = mergeLocalPlaytimes(cached, localPlaytimes)
       await saveOwnedGamesCache(games)
