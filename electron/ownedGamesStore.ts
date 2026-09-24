@@ -1,10 +1,83 @@
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { OwnedGame } from '../src/shared/ownedGames.js'
 import { loadAppInfoEntries } from './appInfoStore.js'
 import type { AppInfoEntry } from './appInfoParser.js'
 
 let cacheBaseDir = ''
+
+const STEAM_ID64_BASE = 76561197960265728n
+
+export function steamAccountId(steamId: string): string | null {
+  if (!/^\d{17}$/.test(steamId)) return null
+
+  try {
+    const accountId = BigInt(steamId) - STEAM_ID64_BASE
+    return accountId >= 0n && accountId <= 0xffffffffn ? accountId.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function extractBalancedBlock(content: string, key: string): string | null {
+  const keyMatch = new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*\\{`, 'i').exec(content)
+  if (!keyMatch) return null
+
+  const openBrace = content.indexOf('{', keyMatch.index)
+  let depth = 0
+  for (let index = openBrace; index < content.length; index += 1) {
+    if (content[index] === '{') depth += 1
+    if (content[index] === '}') {
+      depth -= 1
+      if (depth === 0) return content.slice(openBrace + 1, index)
+    }
+  }
+  return null
+}
+
+export function parseLocalPlaytimes(content: string): Map<number, number> {
+  const appsBlock = extractBalancedBlock(content, 'apps')
+  const playtimes = new Map<number, number>()
+  if (!appsBlock) return playtimes
+
+  const appPattern = /"(\d+)"\s*\{/g
+  for (const match of appsBlock.matchAll(appPattern)) {
+    const appBlock = extractBalancedBlock(appsBlock.slice(match.index), match[1])
+    if (!appBlock) continue
+    const playtimeMatch = /"Playtime"\s*"(\d+)"/i.exec(appBlock)
+    if (playtimeMatch) playtimes.set(Number(match[1]), Number(playtimeMatch[1]))
+  }
+  return playtimes
+}
+
+export async function loadLocalPlaytimes(
+  libraryCacheDir: string,
+  steamId: string,
+): Promise<Map<number, number>> {
+  const accountId = steamAccountId(steamId)
+  if (!accountId) return new Map()
+
+  const steamRoot = dirname(dirname(libraryCacheDir))
+  const localConfigPath = join(steamRoot, 'userdata', accountId, 'config', 'localconfig.vdf')
+  try {
+    return parseLocalPlaytimes(await readFile(localConfigPath, 'utf-8'))
+  } catch {
+    return new Map()
+  }
+}
+
+export function mergeLocalPlaytimes(
+  games: OwnedGame[],
+  localPlaytimes: ReadonlyMap<number, number>,
+): OwnedGame[] {
+  return games.map((game) => {
+    if (game.playtimeForever > 0) return game
+    const localPlaytime = localPlaytimes.get(game.appid)
+    return localPlaytime !== undefined && localPlaytime > 0
+      ? { ...game, playtimeForever: localPlaytime }
+      : game
+  })
+}
 
 export function setOwnedGamesCacheBaseDir(dir: string): void {
   cacheBaseDir = dir
@@ -114,13 +187,17 @@ export async function fetchOwnedGamesWithLibrary(
   steamId: string,
   libraryCacheDir: string,
 ): Promise<OwnedGame[]> {
-  const [apiGames, libraryAppIds, appInfoEntries, recentlyPlayed] = await Promise.all([
+  const [apiGames, libraryAppIds, appInfoEntries, recentlyPlayed, localPlaytimes] = await Promise.all([
     fetchOwnedGames(apiKey, steamId),
     scanLibraryCacheAppIds(libraryCacheDir),
     loadAppInfoEntries(libraryCacheDir),
     fetchRecentlyPlayedGames(apiKey, steamId),
+    loadLocalPlaytimes(libraryCacheDir, steamId),
   ])
-  return mergeWithLibraryCache(apiGames, libraryAppIds, appInfoEntries, recentlyPlayed)
+  return mergeLocalPlaytimes(
+    mergeWithLibraryCache(apiGames, libraryAppIds, appInfoEntries, recentlyPlayed),
+    localPlaytimes,
+  )
 }
 
 // 调 Steam Web API：IPlayerService/GetOwnedGames/v1/

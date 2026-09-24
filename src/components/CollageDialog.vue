@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { computeLayout, dominantAspectRatio, moveItem, type CollageImage } from '../shared/collage'
+import { pickLocalImages as selectLocalImages } from '../shared/localImagePicker'
 
 const props = defineProps<{ urls: string[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -103,8 +104,8 @@ function onImgLoad(): void {
 }
 
 async function pickLocalImages(): Promise<void> {
-  const picked = await window.imageLibrary.pickLocalImages()
-  if (!picked || picked.length === 0) return
+  const picked = await selectLocalImages()
+  if (picked.length === 0) return
   localUrls.value.push(...picked)
 }
 

@@ -63,6 +63,10 @@ const selectedImageUrls = computed(() => {
 
 const gameReviewItems = ref<GameReviewItem[]>([])
 
+function reorderGameReviewItems(games: GameReviewItem[]): void {
+  gameReviewItems.value = games
+}
+
 function openGameReview(): void {
   const games = selectedGamesForReview(images.value, selectedPaths.value)
   if (games.length === 0) {
@@ -910,7 +914,11 @@ async function selectDirectory(): Promise<void> {
 
     <ReviewRank v-if="activeTab === 'review'" />
 
-    <GameReview v-if="activeTab === 'game-review'" :games="gameReviewItems" />
+    <GameReview
+      v-show="activeTab === 'game-review'"
+      :games="gameReviewItems"
+      @reorder="reorderGameReviewItems"
+    />
 
     <CollageDialog
       v-if="isCollageDialogOpen"

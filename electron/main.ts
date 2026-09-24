@@ -17,6 +17,8 @@ import {
 import {
   fetchOwnedGamesWithLibrary,
   loadCachedOwnedGames,
+  loadLocalPlaytimes,
+  mergeLocalPlaytimes,
   saveOwnedGamesCache,
   setOwnedGamesCacheBaseDir,
 } from './ownedGamesStore.js'
@@ -218,17 +220,23 @@ ipcMain.handle('achievements:open-cache-dir', async (_event, appId: string, game
 })
 
 ipcMain.handle('owned-games:fetch', async (_event, force?: boolean) => {
+  const settings = await loadSettings()
+  const defaultLibraryCache = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
+
   if (!force) {
     const cached = await loadCachedOwnedGames()
-    if (cached) return { games: cached }
+    if (cached) {
+      const localPlaytimes = await loadLocalPlaytimes(defaultLibraryCache, settings.steamId)
+      const games = mergeLocalPlaytimes(cached, localPlaytimes)
+      await saveOwnedGamesCache(games)
+      return { games }
+    }
   }
 
-  const settings = await loadSettings()
   if (!settings.apiKey || !settings.steamId) {
     return { games: [], error: '未配置 Web API' }
   }
   try {
-    const defaultLibraryCache = 'C:\\Program Files (x86)\\Steam\\appcache\\librarycache'
     const games = await fetchOwnedGamesWithLibrary(settings.apiKey, settings.steamId, defaultLibraryCache)
     await saveOwnedGamesCache(games)
     return { games }

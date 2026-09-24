@@ -11,6 +11,7 @@ import {
   type TierList,
 } from '../shared/tierList'
 import { takeReviewPool } from '../shared/reviewPool'
+import { pickLocalImages } from '../shared/localImagePicker'
 
 const list = ref<TierList>(emptyTierList())
 const isImporting = ref(false)
@@ -46,7 +47,7 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 function scheduleSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    void window.imageLibrary.saveTierList(list.value)
+    void window.imageLibrary?.saveTierList(list.value)
   }, 400)
 }
 
@@ -71,8 +72,8 @@ async function importLocalImages(): Promise<void> {
   isImporting.value = true
   errorMessage.value = ''
   try {
-    const picked = await window.imageLibrary.pickLocalImages()
-    if (!picked || picked.length === 0) return
+    const picked = await pickLocalImages()
+    if (picked.length === 0) return
     let next = list.value
     for (const src of picked) {
       next = addToPool(next, { id: src, src, label: tierLabelFromUrl(src, src) })

@@ -7,6 +7,9 @@ import {
   loadCachedOwnedGames,
   saveOwnedGamesCache,
   parseOwnedGamesResponse,
+  parseLocalPlaytimes,
+  steamAccountId,
+  mergeLocalPlaytimes,
 } from './ownedGamesStore.js'
 
 let tempDir: string
@@ -47,6 +50,51 @@ describe('parseOwnedGamesResponse', () => {
   it('defaults missing playtime to 0 and name to empty', () => {
     const data = { response: { games: [{ appid: 1 }] } }
     expect(parseOwnedGamesResponse(data)).toEqual([{ appid: 1, name: '', playtimeForever: 0 }])
+  })
+})
+
+
+
+describe('local Steam playtime', () => {
+  it('converts a SteamID64 to its userdata account ID', () => {
+    expect(steamAccountId('76561198873178117')).toBe('912912389')
+    expect(steamAccountId('invalid')).toBeNull()
+  })
+
+  it('extracts AppID playtimes from localconfig.vdf', () => {
+    const content = `
+      "apps"
+      {
+        "550"
+        {
+          "LastPlayed" "1756135835"
+          "Playtime" "2011"
+        }
+        "1449850"
+        {
+          "Playtime" "67796"
+        }
+      }
+    `
+
+    expect(parseLocalPlaytimes(content)).toEqual(
+      new Map([
+        [550, 2011],
+        [1449850, 67796],
+      ]),
+    )
+  })
+
+  it('fills missing family playtime without replacing API totals', () => {
+    const games = [
+      { appid: 10, name: 'Owned', playtimeForever: 120 },
+      { appid: 20, name: 'Family', playtimeForever: 0, isFamily: true },
+    ]
+
+    expect(mergeLocalPlaytimes(games, new Map([[10, 999], [20, 321]]))).toEqual([
+      { appid: 10, name: 'Owned', playtimeForever: 120 },
+      { appid: 20, name: 'Family', playtimeForever: 321, isFamily: true },
+    ])
   })
 })
 
