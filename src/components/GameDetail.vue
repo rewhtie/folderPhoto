@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { ImageAsset } from '../shared/imageLibrary'
-import { formatFileSize } from '../shared/format'
+import type { ImageAsset } from '../shared/common/contracts/image-library'
+import { formatFileSize } from '../shared/common/format'
 
 const props = defineProps<{
   appId: string

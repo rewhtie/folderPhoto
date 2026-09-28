@@ -25,8 +25,8 @@ import {
 import { setAchievementsBaseDir, cacheAchievementIcons, getAchievementCacheDir } from './achievementCache.js'
 import { exportImages } from './imageExporter.js'
 import { loadSteamCollections } from './steamCollections.js'
-import type { Collections } from '../src/shared/collections.js'
-import type { TierList } from '../src/shared/tierList.js'
+import type { Collections } from '../src/shared/collections/model.js'
+import type { TierList } from '../src/shared/tier-list/model.js'
 import type { SteamSettings } from './settingsStore.js'
 
 const __filename = fileURLToPath(import.meta.url)

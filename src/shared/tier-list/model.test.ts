@@ -7,7 +7,7 @@ import {
   TIER_ORDER,
   type TierEntry,
   type TierList,
-} from './tierList'
+} from './model'
 
 const e = (id: string): TierEntry => ({ id, src: `local-image://file/x/${id}.jpg`, label: id })
 

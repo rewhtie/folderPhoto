@@ -1,14 +1,32 @@
 <script setup lang="ts">
 import { toPng } from 'html-to-image'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import type { GameReviewItem } from '../shared/gameReview'
+import {
+  GAME_TYPE_OPTIONS,
+  gameTypeColor,
+  gameTypeLabel,
+  normalizeGameTypeIds,
+} from '../shared/game-review/catalog'
+import {
+  durationClass,
+  formatSteamPlaytime,
+  normalizeDuration,
+  recommendationClass,
+} from '../shared/game-review/formatting'
+import { reorderIds, type DropPosition } from '../shared/game-review/order'
+import type {
+  GameReviewDraft,
+  GameReviewItem,
+  StoredCustomGame,
+  StoredGameReview,
+} from '../shared/game-review/model'
 import {
   createGameReviewBackup,
   GameReviewBackupError,
   mergeGameReviewImport,
   parseGameReviewImport,
   type GameReviewBackupState,
-} from '../shared/gameReviewBackup'
+} from '../shared/game-review/backup'
 import {
   loadGameReviewOrder,
   loadGameReviews,
@@ -17,11 +35,8 @@ import {
   saveGameReviewOrder,
   saveGameReviews,
   saveStoredCustomGames,
-  type GameReviewDraft,
-  type StoredCustomGame,
-  type StoredGameReview,
-} from '../shared/gameReviewStorage'
-import { pickLocalImages } from '../shared/localImagePicker'
+} from '../shared/game-review/storage'
+import { pickLocalImages } from '../shared/common/local-image-picker'
 
 interface CustomReviewGame extends GameReviewItem {
   isCustom: true
@@ -144,17 +159,6 @@ function toggleReviewBadge(appId: string): void {
   reviewBadgeStyles[appId] = nextBadge.id
 }
 
-function normalizeGameTypeIds(types: string[]): string[] {
-  const typeIds = new Set<string>()
-
-  for (const type of types) {
-    const typeId = typeAliases.get(type)
-    if (typeId) typeIds.add(typeId)
-  }
-
-  return [...typeIds]
-}
-
 function newReviewDraft(appId?: string): GameReviewDraft {
   const savedDraft = appId
     ? savedReviews[appId] ?? storedCustomGames[appId]?.review
@@ -241,8 +245,6 @@ const hasActiveFilters = computed(
   () => selectedTypeFilters.value.length > 0 || selectedRecommendationFilters.value.length > 0,
 )
 
-type DropPosition = 'before' | 'after'
-
 interface PendingDrag {
   appId: string
   pointerId: number
@@ -316,14 +318,12 @@ function handleDragPointerMove(event: PointerEvent): void {
 function applyReorder(): void {
   if (!draggedAppId.value || !dropTarget.value) return
 
-  const orderedIds = allGames.value.map((game) => game.appId)
-  const sourceIndex = orderedIds.indexOf(draggedAppId.value)
-  if (sourceIndex < 0) return
-
-  const [movedId] = orderedIds.splice(sourceIndex, 1)
-  const targetIndex = orderedIds.indexOf(dropTarget.value.appId)
-  if (targetIndex < 0) return
-  orderedIds.splice(targetIndex + (dropTarget.value.position === 'after' ? 1 : 0), 0, movedId)
+  const orderedIds = reorderIds(
+    allGames.value.map((game) => game.appId),
+    draggedAppId.value,
+    dropTarget.value.appId,
+    dropTarget.value.position,
+  )
   gameOrder.value = orderedIds
   saveGameReviewOrder(window.localStorage, orderedIds)
 
@@ -469,58 +469,14 @@ function toggleGameType(appId: string, type: string): void {
   }
 }
 
-interface GameTypeDefinition {
-  label: string
-  color: string
-  aliases?: string[]
-}
-
-const gameTypes: Record<string, GameTypeDefinition> = {
-  butter: { label: '🧈', color: '#ffcfdf' },
-  galgame: { label: 'Galgame', color: '#f472b6' },
-  horror: { label: '恐怖游戏', color: '#dc2626' },
-  rpg: { label: 'RPG', color: '#8b5cf6' },
-  jrpg: { label: 'JRPG', color: '#ec4899' },
-  soulslike: { label: '类魂', color: '#222831' },
-  roguelike: { label: '肉鸽', color: '#c084fc' },
-  card: { label: '卡牌', color: '#fbbf24' },
-  management: { label: '建造经营', color: '#9896f1', aliases: ['养成经营'] },
-  slg: { label: 'SLG', color: '#ff165d', aliases: ['SLG养成'] },
-  towerDefense: { label: '塔防', color: '#6639a6' },
-  casual: { label: '休闲', color: '#a5dee5' },
-  puzzle: { label: '解谜', color: '#60a5fa' },
-  metroidvania: { label: '类银河恶魔城', color: '#a8e6cf' },
-  bulletHell: { label: '弹幕', color: '#ffd3b6' },
-  sideScroller: { label: '横版闯关', color: '#f87171' },
-  platformer: { label: '平台跳跃', color: '#67e8f9' },
-  openWorld: { label: '开放世界', color: '#5eead4' },
-  hakoniwa: { label: '箱庭地图', color: '#ff9a8b', aliases: ['箱体地图'] },
-  multiplayer: { label: '联机', color: '#86efac' },
-  sokoban: { label: '推箱子', color: '#d6b978' },
-  action: { label: '动作游戏', color: '#112d4e' },
-  shooter: { label: '射击游戏', color: '#38bdf8' },
-  meta: { label: 'Meta', color: '#f59e0b' },
-  turnBased: { label: '回合制', color: '#14b8a6' },
-  visualNovel: { label: '视觉小说', color: '#fc5185' },
-}
-
-const typeOptions = Object.entries(gameTypes).map(([id, definition]) => ({
-  id,
-  ...definition,
-}))
-const typeAliases = new Map<string, string>()
-for (const type of typeOptions) {
-  typeAliases.set(type.id, type.id)
-  typeAliases.set(type.label, type.id)
-  for (const alias of type.aliases ?? []) typeAliases.set(alias, type.id)
-}
+const typeOptions = GAME_TYPE_OPTIONS
 
 function typeLabel(typeId: string): string {
-  return gameTypes[typeId]?.label ?? typeId
+  return gameTypeLabel(typeId)
 }
 
 function typeStyle(typeId: string): { color?: string } {
-  return { color: gameTypes[typeId]?.color }
+  return { color: gameTypeColor(typeId) }
 }
 
 function toggleRecommendationMenu(appId: string, event: MouseEvent): void {
@@ -536,40 +492,6 @@ function toggleRecommendationMenu(appId: string, event: MouseEvent): void {
 function selectRecommendation(appId: string, recommendation: string): void {
   drafts[appId].recommendation = recommendation
   recommendationMenu.value = null
-}
-
-function recommendationClass(recommendation: string): string {
-  const classes: Record<string, string> = {
-    C: 'grade-c',
-    'C+': 'grade-c-plus',
-    B: 'grade-b',
-    'B+': 'grade-b-plus',
-    A: 'grade-a',
-    'A+': 'grade-a-plus',
-    S: 'grade-s',
-    'S+': 'grade-s-plus',
-  }
-  return classes[recommendation] ?? 'grade-empty'
-}
-
-function durationClass(duration: string): string {
-  const match = duration.trim().match(/^(\d+(?:\.\d+)?)\s*(?:h|小时)?$/i)
-  if (!match) return 'duration-default'
-
-  const hours = Number(match[1])
-  if (hours >= 150) return 'duration-rainbow'
-  if (hours >= 99) return 'duration-gold'
-  if (hours >= 60) return 'duration-orange'
-  if (hours >= 30) return 'duration-purple'
-  if (hours >= 10) return 'duration-blue'
-  return 'duration-green'
-}
-
-function normalizeDuration(value: string): string {
-  return value
-    .replace(/(?:h|小时)/gi, '')
-    .replace(/[^\d.]/g, '')
-    .replace(/(\..*)\./g, '$1')
 }
 
 function updateDuration(appId: string, event: Event): void {
@@ -698,10 +620,6 @@ watch(
   },
   { immediate: true },
 )
-
-function formatSteamPlaytime(minutes: number): string {
-  return String(Math.round((minutes / 60) * 10) / 10)
-}
 
 let playtimeRequestSequence = 0
 

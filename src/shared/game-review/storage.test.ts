@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import type { StoredGameReview } from './model'
 import {
   loadGameReviews,
   mergeGamesWithStoredReviews,
   saveGameReviews,
-  type StoredGameReview,
-} from './gameReviewStorage'
+} from './storage'
 
 function createStorage(initialValue: string | null = null): Pick<Storage, 'getItem' | 'setItem'> & {
   saved: Map<string, string>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeLayout, dominantAspectRatio, moveItem } from './collage'
+import { computeLayout, dominantAspectRatio, moveItem } from './layout'
 
 describe('dominantAspectRatio', () => {
   it('returns the most common ratio rounded to 0.01', () => {

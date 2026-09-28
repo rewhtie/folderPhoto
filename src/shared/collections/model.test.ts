@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPathsToCollection, removePathFromCollection } from './collections'
+import { addPathsToCollection, removePathFromCollection } from './model'
 
 describe('addPathsToCollection', () => {
   it('adds paths to a new collection without duplicates', () => {

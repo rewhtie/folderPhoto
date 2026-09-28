@@ -5,8 +5,8 @@ import { toImageSourceUrl } from './imageProtocol.js'
 import { loadAppNames } from './appManifest.js'
 import { loadAppInfoEntries } from './appInfoStore.js'
 import type { AppInfoEntry } from './appInfoParser.js'
-import type { ImageAsset, ScanImagesResult, ScanImagesOptions } from '../src/shared/imageLibrary.js'
-import { SCAN_KEYWORDS } from '../src/shared/imageNameConfig.js'
+import type { ImageAsset, ScanImagesResult, ScanImagesOptions } from '../src/shared/common/contracts/image-library.js'
+import { SCAN_KEYWORDS } from '../src/shared/image-library/file-name-config.js'
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'])
 

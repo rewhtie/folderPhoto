@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Collections } from '../src/shared/collections.js'
+import type { Collections } from '../src/shared/collections/model.js'
 
 let collectionsFilePath = join(process.cwd(), 'collections.json')
 

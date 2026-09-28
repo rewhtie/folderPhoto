@@ -9,11 +9,11 @@ import {
   type TierEntry,
   type TierKey,
   type TierList,
-} from '../shared/tierList'
-import type { ImageAsset } from '../shared/imageLibrary'
-import { loadGameReviews } from '../shared/gameReviewStorage'
-import { takeReviewPool } from '../shared/reviewPool'
-import { pickLocalImages } from '../shared/localImagePicker'
+} from '../shared/tier-list/model'
+import type { ImageAsset } from '../shared/common/contracts/image-library'
+import { loadGameReviews } from '../shared/game-review/storage'
+import { takeReviewPool } from '../shared/review-rank/pool'
+import { pickLocalImages } from '../shared/common/local-image-picker'
 
 const props = defineProps<{
   images: ImageAsset[]

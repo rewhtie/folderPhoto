@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { tierGames } from './careerCollage'
-import type { OwnedGame } from './ownedGames'
+import { tierGames } from './tiers'
+import type { OwnedGame } from '../common/contracts/owned-games'
 
 function game(appid: number, playtime: number): OwnedGame {
   return { appid, name: `g${appid}`, playtimeForever: playtime }

@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 /// <reference types="unocss/preset-uno" />
 
-import type { ScanImagesResult, SelectDirectoryResult } from './shared/imageLibrary'
-import type { Collections } from './shared/collections'
-import type { OwnedGamesResult } from './shared/ownedGames'
-import type { TierList } from './shared/tierList'
+import type { ScanImagesResult, SelectDirectoryResult } from './shared/common/contracts/image-library'
+import type { Collections } from './shared/collections/model'
+import type { OwnedGamesResult } from './shared/common/contracts/owned-games'
+import type { TierList } from './shared/tier-list/model'
 
 interface ExportResult {
   copied: number

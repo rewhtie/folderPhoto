@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { computeLayout, dominantAspectRatio, moveItem, type CollageImage } from '../shared/collage'
-import { pickLocalImages as selectLocalImages } from '../shared/localImagePicker'
+import { computeLayout, dominantAspectRatio, moveItem, type CollageImage } from '../shared/collage/layout'
+import { pickLocalImages as selectLocalImages } from '../shared/common/local-image-picker'
 
 const props = defineProps<{ urls: string[] }>()
 const emit = defineEmits<{ close: [] }>()

@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { OwnedGame } from '../src/shared/ownedGames.js'
+import type { OwnedGame } from '../src/shared/common/contracts/owned-games.js'
 import { loadAppInfoEntries } from './appInfoStore.js'
 import type { AppInfoEntry } from './appInfoParser.js'
 

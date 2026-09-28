@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ImageAsset } from './imageLibrary'
-import { selectedGamesForReview } from './gameReview'
+import type { ImageAsset } from '../common/contracts/image-library'
+import { selectedGamesForReview } from './selection'
 
 function image(overrides: Partial<ImageAsset>): ImageAsset {
   return {

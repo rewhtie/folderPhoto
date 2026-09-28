@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { OwnedGame, OwnedGamesResult } from '../shared/ownedGames'
-import { tierGames, type Tier, type Orientation, type TieredGames } from '../shared/careerCollage'
+import type { OwnedGame, OwnedGamesResult } from '../shared/common/contracts/owned-games'
+import { tierGames, type Tier, type Orientation, type TieredGames } from '../shared/career-collage/tiers'
 
 const games = ref<OwnedGame[]>([])
 const loading = ref(false)

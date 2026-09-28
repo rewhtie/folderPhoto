@@ -1,10 +1,5 @@
-import type { ImageAsset } from './imageLibrary.js'
-
-export interface GameReviewItem {
-  appId: string
-  appName: string
-  coverUrl: string
-}
+import type { ImageAsset } from '../common/contracts/image-library.js'
+import type { GameReviewItem } from './model.js'
 
 export function selectedGamesForReview(
   images: ImageAsset[],

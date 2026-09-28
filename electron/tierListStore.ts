@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { emptyTierList, type TierList } from '../src/shared/tierList.js'
+import { emptyTierList, type TierList } from '../src/shared/tier-list/model.js'
 
 let tierListFilePath = join(process.cwd(), 'tierList.json')
 

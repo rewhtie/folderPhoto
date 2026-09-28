@@ -1,9 +1,9 @@
-import {
-  normalizeGameReviewDraft,
-  type GameReviewDraft,
-  type StoredCustomGame,
-  type StoredGameReview,
-} from './gameReviewStorage.js'
+import { normalizeGameReviewDraft } from './storage.js'
+import type {
+  GameReviewDraft,
+  StoredCustomGame,
+  StoredGameReview,
+} from './model.js'
 
 export const GAME_REVIEW_BACKUP_FORMAT = 'steam-pc-game-reviews'
 export const GAME_REVIEW_BACKUP_VERSION = 1

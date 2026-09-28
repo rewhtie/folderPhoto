@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { pickLocalImages } from './localImagePicker'
+import { pickLocalImages } from './local-image-picker'
 
 describe('pickLocalImages', () => {
   afterEach(() => {
