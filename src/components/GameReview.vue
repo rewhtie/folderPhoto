@@ -3,12 +3,22 @@ import { toPng } from 'html-to-image'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { GameReviewItem } from '../shared/gameReview'
 import {
+  createGameReviewBackup,
+  GameReviewBackupError,
+  mergeGameReviewImport,
+  parseGameReviewImport,
+  type GameReviewBackupState,
+} from '../shared/gameReviewBackup'
+import {
   loadGameReviewOrder,
   loadGameReviews,
+  loadStoredCustomGames,
   mergeGamesWithStoredReviews,
   saveGameReviewOrder,
   saveGameReviews,
+  saveStoredCustomGames,
   type GameReviewDraft,
+  type StoredCustomGame,
   type StoredGameReview,
 } from '../shared/gameReviewStorage'
 import { pickLocalImages } from '../shared/localImagePicker'
@@ -37,9 +47,27 @@ const drafts = reactive<Record<string, GameReviewDraft>>({})
 const savedReviews = reactive<Record<string, StoredGameReview>>(
   loadGameReviews(window.localStorage),
 )
+const storedCustomGames = reactive<Record<string, StoredCustomGame>>(
+  Object.fromEntries(
+    loadStoredCustomGames(window.localStorage).map((game) => [game.appId, game]),
+  ),
+)
 const reviewBadgeStyles = reactive<Record<string, ReviewBadgeStyle>>({})
-const customGames = ref<CustomReviewGame[]>([])
+const customGames = ref<CustomReviewGame[]>(
+  Object.values(storedCustomGames).map((game) => ({
+    appId: game.appId,
+    appName: game.appName,
+    coverUrl: '',
+    isCustom: true,
+  })),
+)
 const hoveredRating = ref<{ appId: string; rating: number } | null>(null)
+const recordFileInput = ref<HTMLInputElement | null>(null)
+const isImportingRecords = ref(false)
+const isExportingRecords = ref(false)
+const recordTransferMessage = ref('')
+const recordTransferError = ref('')
+let isApplyingRecordImport = false
 let customGameSequence = 0
 interface FloatingMenu {
   appId: string
@@ -54,8 +82,8 @@ const recommendationOptions = ['', 'C', 'C+', 'B', 'B+', 'A', 'A+', 'S', 'S+']
 const selectedTypeFilters = ref<string[]>([])
 const selectedRecommendationFilters = ref<string[]>([])
 const gameNameQuery = ref('')
-const pageSizeOptions = [5, 10, 20, 100]
-const pageSize = ref(10)
+const pageSizeOptions = [5, 10, 20, 50, 100]
+const pageSize = ref(20)
 const currentPage = ref(1)
 const gameOrder = ref<string[]>(loadGameReviewOrder(window.localStorage))
 const tableEl = ref<HTMLElement | null>(null)
@@ -128,7 +156,9 @@ function normalizeGameTypeIds(types: string[]): string[] {
 }
 
 function newReviewDraft(appId?: string): GameReviewDraft {
-  const savedDraft = appId ? savedReviews[appId] : undefined
+  const savedDraft = appId
+    ? savedReviews[appId] ?? storedCustomGames[appId]?.review
+    : undefined
   if (savedDraft) {
     return {
       ...savedDraft,
@@ -142,6 +172,7 @@ function newReviewDraft(appId?: string): GameReviewDraft {
     duration: '',
     rating: 0,
     recommendation: '',
+    coverBlurred: false,
   }
 }
 
@@ -172,6 +203,7 @@ async function chooseCustomCover(appId: string): Promise<void> {
 function removeGame(game: GameReviewItem | CustomReviewGame): void {
   if (isCustomGame(game)) {
     customGames.value = customGames.value.filter((item) => item.appId !== game.appId)
+    delete storedCustomGames[game.appId]
   } else {
     delete savedReviews[game.appId]
     emit(
@@ -444,7 +476,7 @@ interface GameTypeDefinition {
 }
 
 const gameTypes: Record<string, GameTypeDefinition> = {
-  butter: { label: '黄油', color: '#ffcfdf' },
+  butter: { label: '🧈', color: '#ffcfdf' },
   galgame: { label: 'Galgame', color: '#f472b6' },
   horror: { label: '恐怖游戏', color: '#dc2626' },
   rpg: { label: 'RPG', color: '#8b5cf6' },
@@ -620,9 +652,9 @@ async function exportTable(): Promise<void> {
       .getPropertyValue('--panel-background-solid')
       .trim()
     const table = node.querySelector('table')
-    const overflowRight = 48
-    const exportWidth = (table?.offsetWidth ?? node.scrollWidth) + overflowRight
-    const exportHeight = table?.offsetHeight ?? node.scrollHeight
+    const exportPadding = 12
+    const exportWidth = (table?.offsetWidth ?? node.scrollWidth) + exportPadding * 2
+    const exportHeight = (table?.offsetHeight ?? node.scrollHeight) + exportPadding * 2
     const dataUrl = await toPng(node, {
       pixelRatio: 3,
       cacheBust: true,
@@ -631,7 +663,7 @@ async function exportTable(): Promise<void> {
       height: exportHeight,
       style: {
         boxSizing: 'border-box',
-        paddingRight: `${overflowRight}px`,
+        padding: `${exportPadding}px`,
         overflow: 'visible',
         background: exportBackground,
       },
@@ -693,7 +725,8 @@ async function fillSteamPlaytime(games: GameReviewItem[]): Promise<void> {
       if (minutes === undefined || minutes <= 0 || !draft) continue
 
       const currentHours = Number(draft.duration.trim())
-      if (draft.duration.trim() !== '' && currentHours !== 0) continue
+      const steamHours = minutes / 60
+      if (Number.isFinite(currentHours) && currentHours > 0 && steamHours <= currentHours) continue
       draft.duration = formatSteamPlaytime(minutes)
     }
   } catch {
@@ -704,14 +737,27 @@ async function fillSteamPlaytime(games: GameReviewItem[]): Promise<void> {
 let saveDraftsTimer: number | undefined
 
 function snapshotGameReviews(): void {
-  for (const game of allGames.value) {
-    if (isCustomGame(game)) continue
+  const activeCustomIds = new Set(customGames.value.map((game) => game.appId))
+  for (const appId of Object.keys(storedCustomGames)) {
+    if (!activeCustomIds.has(appId)) delete storedCustomGames[appId]
+  }
 
+  for (const game of allGames.value) {
     const draft = drafts[game.appId]
     if (!draft) continue
 
+    if (isCustomGame(game)) {
+      storedCustomGames[game.appId] = {
+        appId: game.appId,
+        appName: game.appName,
+        review: { ...draft, type: [...draft.type] },
+      }
+      continue
+    }
+
     savedReviews[game.appId] = {
       appName: game.appName || game.appId,
+      coverUrl: game.coverUrl,
       ...draft,
       type: [...draft.type],
     }
@@ -725,15 +771,151 @@ function persistGameReviews(): void {
   }
   snapshotGameReviews()
   saveGameReviews(window.localStorage, savedReviews)
+  saveStoredCustomGames(window.localStorage, Object.values(storedCustomGames))
 }
 
 function scheduleGameReviewSave(): void {
+  if (isApplyingRecordImport) return
   snapshotGameReviews()
   if (saveDraftsTimer !== undefined) window.clearTimeout(saveDraftsTimer)
   saveDraftsTimer = window.setTimeout(persistGameReviews, 300)
 }
 
+function replaceReactiveRecord<T>(target: Record<string, T>, source: Record<string, T>): void {
+  for (const key of Object.keys(target)) delete target[key]
+  Object.assign(target, source)
+}
+
+function currentBackupState(): GameReviewBackupState {
+  persistGameReviews()
+  return {
+    reviews: Object.fromEntries(
+      Object.entries(savedReviews).map(([appId, review]) => [
+        appId,
+        { ...review, type: [...review.type] },
+      ]),
+    ),
+    customGames: Object.values(storedCustomGames).map((game) => ({
+      appId: game.appId,
+      appName: game.appName,
+      review: { ...game.review, type: [...game.review.type] },
+    })),
+    order: [...gameOrder.value],
+  }
+}
+
+function chooseReviewRecordFile(): void {
+  if (isImportingRecords.value || !recordFileInput.value) return
+  recordFileInput.value.value = ''
+  recordFileInput.value.click()
+}
+
+function applyImportedReviewState(
+  state: GameReviewBackupState,
+  importedCustomIds: Set<string>,
+): void {
+  const existingCoverById = new Map(customGames.value.map((game) => [game.appId, game.coverUrl]))
+
+  isApplyingRecordImport = true
+  try {
+    replaceReactiveRecord(savedReviews, state.reviews)
+    replaceReactiveRecord(
+      storedCustomGames,
+      Object.fromEntries(state.customGames.map((game) => [game.appId, game])),
+    )
+    customGames.value = state.customGames.map((game) => ({
+      appId: game.appId,
+      appName: game.appName,
+      coverUrl: importedCustomIds.has(game.appId) ? '' : existingCoverById.get(game.appId) ?? '',
+      isCustom: true,
+    }))
+
+    const nextDrafts: Record<string, GameReviewDraft> = {}
+    for (const [appId, review] of Object.entries(state.reviews)) {
+      nextDrafts[appId] = { ...review, type: normalizeGameTypeIds(review.type) }
+    }
+    for (const game of state.customGames) {
+      nextDrafts[game.appId] = {
+        ...game.review,
+        type: normalizeGameTypeIds(game.review.type),
+      }
+    }
+    replaceReactiveRecord(drafts, nextDrafts)
+
+    gameOrder.value = [...state.order]
+    clearFilters()
+    gameNameQuery.value = ''
+    currentPage.value = 1
+    persistGameReviews()
+    saveGameReviewOrder(window.localStorage, gameOrder.value)
+  } finally {
+    isApplyingRecordImport = false
+  }
+}
+
+async function importReviewRecords(event: Event): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  isImportingRecords.value = true
+  recordTransferMessage.value = ''
+  recordTransferError.value = ''
+
+  try {
+    let value: unknown
+    try {
+      value = JSON.parse(await file.text())
+    } catch {
+      throw new Error('无法读取 JSON 文件')
+    }
+
+    const imported = parseGameReviewImport(value)
+    const merged = mergeGameReviewImport(currentBackupState(), imported)
+    applyImportedReviewState(
+      merged,
+      new Set(imported.customGames?.map((game) => game.appId) ?? []),
+    )
+    recordTransferMessage.value = `已导入 ${Object.keys(imported.reviews).length + (imported.customGames?.length ?? 0)} 条测评记录`
+  } catch (error) {
+    recordTransferError.value =
+      error instanceof GameReviewBackupError || error instanceof Error
+        ? error.message
+        : '导入测评记录失败'
+  } finally {
+    isImportingRecords.value = false
+  }
+}
+
+function exportReviewRecords(): void {
+  if (isExportingRecords.value) return
+
+  isExportingRecords.value = true
+  recordTransferMessage.value = ''
+  recordTransferError.value = ''
+
+  try {
+    const backup = createGameReviewBackup(currentBackupState())
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `game-reviews-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    recordTransferMessage.value = '测评记录已导出'
+  } catch (error) {
+    recordTransferError.value = error instanceof Error ? error.message : '导出测评记录失败'
+  } finally {
+    isExportingRecords.value = false
+  }
+}
+
 watch(drafts, scheduleGameReviewSave, { deep: true, flush: 'sync' })
+watch(customGames, scheduleGameReviewSave, { deep: true })
 watch(
   () => props.games,
   async (games) => {
@@ -752,24 +934,88 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="review-page">
-    <section class="review-header">
-      <h1>游戏测评</h1>
-      <p>已选择 {{ allGames.length }} 款游戏，可在表格中记录你的游玩感受。</p>
+  <main class="review-page min-h-screen bg-[var(--page-background)] p-40px">
+    <section
+      class="review-header mx-auto max-w-1180px border border-[var(--border)] rounded-24px bg-[var(--panel-background)] p-32px [box-shadow:var(--shadow-panel)]"
+    >
+      <h1 class="m-0 mb-12px text-36px">游戏测评</h1>
+      <p class="m-0 text-[var(--text-secondary)] [line-height:1.7]">
+        已选择 {{ allGames.length }} 款游戏，可在表格中记录你的游玩感受。
+      </p>
+      <div class="mt-20px flex flex-wrap items-center gap-10px">
+        <button
+          class="cursor-pointer border border-[var(--accent-border)] rounded-10px bg-[var(--accent)] px-16px py-9px text-14px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-55"
+          type="button"
+          :disabled="isImportingRecords"
+          @click="chooseReviewRecordFile"
+        >
+          {{ isImportingRecords ? '导入中…' : '导入记录' }}
+        </button>
+        <button
+          class="cursor-pointer border border-[var(--border-strong)] rounded-10px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] disabled:cursor-wait disabled:opacity-55"
+          type="button"
+          :disabled="isExportingRecords"
+          @click="exportReviewRecords"
+        >
+          {{ isExportingRecords ? '导出中…' : '导出记录' }}
+        </button>
+        <button
+          class="cursor-pointer border border-[var(--border-strong)] rounded-10px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] disabled:cursor-wait disabled:opacity-55"
+          type="button"
+          :disabled="isExporting || filteredGames.length === 0"
+          @click="exportTable"
+        >
+          {{ isExporting ? '导出中…' : '导出图片' }}
+        </button>
+        <input
+          ref="recordFileInput"
+          class="absolute h-1px w-1px overflow-hidden whitespace-nowrap border-0 p-0 [clip:rect(0,0,0,0)]"
+          type="file"
+          accept="application/json,.json"
+          @change="importReviewRecords"
+        />
+      </div>
+      <p
+        v-if="recordTransferError || exportError"
+        class="mt-12px text-13px font-700 text-[var(--danger-text)]"
+        role="alert"
+      >
+        {{ recordTransferError || exportError }}
+      </p>
+      <p
+        v-else-if="recordTransferMessage"
+        class="mt-12px text-13px font-700 text-[var(--success-text)]"
+        aria-live="polite"
+      >
+        {{ recordTransferMessage }}
+      </p>
     </section>
 
-    <section class="review-content">
-      <div v-if="allGames.length === 0" class="empty-state custom-empty-state">
+    <section class="mx-auto mt-24px max-w-1180px">
+      <div
+        v-if="allGames.length === 0"
+        class="grid justify-items-center gap-16px border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-32px text-center text-[var(--text-muted)]"
+      >
         <span>请先在图片浏览器中选择游戏，或添加一个自定义游戏。</span>
-        <button type="button" @click="addCustomGame">＋ 添加自定义游戏</button>
+        <button
+          class="cursor-pointer border border-[var(--border-strong)] rounded-9px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] outline-none hover:border-current focus-visible:border-current"
+          type="button"
+          @click="addCustomGame"
+        >
+          ＋ 添加自定义游戏
+        </button>
       </div>
 
-      <div v-else class="review-results">
-        <div class="filter-bar" aria-label="筛选游戏测评">
-          <label class="game-name-search">
-            <span class="filter-heading">游戏名</span>
+      <div v-else class="grid gap-14px">
+        <div
+          class="filter-bar grid items-center gap-x-18px gap-y-14px border border-[var(--border)] rounded-18px bg-[var(--panel-background)] px-18px py-16px [box-shadow:var(--shadow-panel)]"
+          aria-label="筛选游戏测评"
+        >
+          <label class="game-name-search min-w-0 flex items-center gap-10px">
+            <span class="flex-none text-13px font-900 text-[var(--text-soft)]">游戏名</span>
             <input
               v-model="gameNameQuery"
+              class="w-full min-w-0 border border-[var(--border-soft)] rounded-8px bg-[var(--input-background)] px-10px py-8px text-13px text-[var(--text-bright)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--accent-border)] focus:shadow-[0_0_0_3px_var(--focus-ring)]"
               type="search"
               placeholder="搜索游戏名"
               aria-label="搜索游戏名"
@@ -777,16 +1023,18 @@ onBeforeUnmount(() => {
           </label>
 
           <div
-            class="filter-group type-filter-group"
+            class="filter-group type-filter-group w-full min-w-0 flex items-start gap-12px"
             role="group"
             aria-labelledby="type-filter-heading"
           >
-            <span id="type-filter-heading" class="filter-heading">类型</span>
-            <div class="filter-options">
+            <span id="type-filter-heading" class="flex-none text-13px font-900 text-[var(--text-soft)]">
+              类型
+            </span>
+            <div class="filter-options min-w-0 flex flex-1 flex-wrap gap-6px">
               <button
                 v-for="type in typeOptions"
                 :key="type.id"
-                class="filter-chip type-filter-chip"
+                class="filter-chip min-h-30px cursor-pointer border border-[var(--border-soft)] rounded-7px bg-transparent px-9px py-5px text-12px font-800 leading-none text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--border-strong)] hover:bg-[var(--accent-hover)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2"
                 :class="{ 'is-selected': selectedTypeFilters.includes(type.id) }"
                 :style="typeStyle(type.id)"
                 type="button"
@@ -798,19 +1046,24 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="filter-divider"></div>
+          <div class="filter-divider h-1px w-full bg-[var(--border-soft)]"></div>
 
           <div
-            class="filter-group recommendation-filter-group"
+            class="filter-group recommendation-filter-group min-w-0 flex items-center gap-12px"
             role="group"
             aria-labelledby="recommendation-filter-heading"
           >
-            <span id="recommendation-filter-heading" class="filter-heading">推荐度</span>
-            <div class="filter-options recommendation-filter-options">
+            <span
+              id="recommendation-filter-heading"
+              class="flex-none text-13px font-900 text-[var(--text-soft)]"
+            >
+              推荐度
+            </span>
+            <div class="min-w-0 flex flex-wrap gap-6px">
               <button
                 v-for="recommendation in recommendationOptions.slice(1)"
                 :key="recommendation"
-                class="filter-chip recommendation-filter-chip"
+                class="filter-chip recommendation-filter-chip min-h-30px w-34px cursor-pointer border border-[var(--border-soft)] rounded-7px bg-transparent px-4px py-5px text-12px font-800 leading-none text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--border-strong)] hover:bg-[var(--accent-hover)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2"
                 :class="[
                   recommendationClass(recommendation),
                   { 'is-selected': selectedRecommendationFilters.includes(recommendation) },
@@ -824,33 +1077,33 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="filter-summary" aria-live="polite">
+          <div
+            class="filter-summary grid min-w-74px justify-items-end gap-4px whitespace-nowrap text-12px font-700 text-[var(--text-faint)]"
+            aria-live="polite"
+          >
             <span>显示 {{ filteredGames.length }} / {{ allGames.length }}</span>
             <button v-if="hasActiveFilters" type="button" @click="clearFilters">清除筛选</button>
           </div>
         </div>
 
-        <div class="review-actions">
-          <p v-if="exportError" class="export-error" role="alert">{{ exportError }}</p>
-          <button
-            class="export-button"
-            type="button"
-            :disabled="isExporting || filteredGames.length === 0"
-            @click="exportTable"
-          >
-            {{ isExporting ? '导出中…' : '导出图片' }}
-          </button>
-        </div>
-
-        <div v-if="filteredGames.length > 0" class="table-scroll">
+        <div
+          v-if="filteredGames.length > 0"
+          class="w-full overflow-x-hidden bg-transparent pr-12px [box-sizing:content-box]"
+        >
           <div ref="tableEl" class="table-export-frame">
             <table class="review-table">
             <thead>
               <tr>
-                <th class="cover-column" scope="col"><span class="visually-hidden">游戏封面</span></th>
-                <th class="game-name-column" scope="col">游戏名</th>
+                <th class="cover-column w-142px" scope="col">
+                  <span
+                    class="absolute h-1px w-1px overflow-hidden whitespace-nowrap border-0 p-0 [clip:rect(0,0,0,0)]"
+                  >
+                    游戏封面
+                  </span>
+                </th>
+                <th class="w-180px" scope="col">游戏名</th>
                 <th scope="col">类型</th>
-                <th class="experience-column" scope="col">体验</th>
+                <th class="w-250px" scope="col">体验</th>
                 <th scope="col">游玩</th>
                 <th scope="col">推荐度</th>
               </tr>
@@ -871,53 +1124,82 @@ onBeforeUnmount(() => {
                     dropTarget?.appId === game.appId && dropTarget.position === 'after',
                 }"
               >
-                <td class="cover-cell">
-                  <button
-                    v-if="isCustomGame(game)"
-                    class="custom-cover-button cover-drag-handle"
-                    :class="{ 'drag-disabled': hasActiveFilters }"
-                    :data-export-ignore="game.coverUrl ? undefined : 'true'"
-                    type="button"
-                    :aria-label="game.coverUrl ? `更换${game.appName || '自定义游戏'}的封面` : '上传自定义游戏封面'"
-                    :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
-                    @pointerdown="beginCoverDrag(game.appId, $event)"
-                    @contextmenu.prevent
-                    @dragstart.prevent
-                    @click="handleCustomCoverClick(game.appId)"
-                  >
-                    <img
+                <td class="cover-cell !p-12px">
+                  <div class="cover-wrapper relative w-110px inline-flex items-center justify-center">
+                    <button
+                      v-if="isCustomGame(game)"
+                      class="custom-cover-button cover-drag-handle min-h-68px w-110px flex cursor-pointer items-center justify-center overflow-hidden border border-[var(--border-strong)] rounded-9px border-dashed bg-[var(--image-well-background)] p-0 text-12px font-800 text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--text-bright)] hover:text-[var(--text-bright)] focus-visible:border-[var(--text-bright)] focus-visible:text-[var(--text-bright)] focus-visible:outline-none"
+                      :class="{ 'drag-disabled': hasActiveFilters }"
+                      :data-export-ignore="game.coverUrl ? undefined : 'true'"
+                      type="button"
+                      :aria-label="game.coverUrl ? `更换${game.appName || '自定义游戏'}的封面` : '上传自定义游戏封面'"
+                      :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
+                      @pointerdown="beginCoverDrag(game.appId, $event)"
+                      @contextmenu.prevent
+                      @dragstart.prevent
+                      @click="handleCustomCoverClick(game.appId)"
+                    >
+                      <img
+                        v-if="game.coverUrl"
+                        class="cover-image block h-auto w-full"
+                        :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
+                        :src="game.coverUrl"
+                        :alt="game.appName || '自定义游戏封面'"
+                        draggable="false"
+                      />
+                      <span v-else>上传封面</span>
+                    </button>
+                    <div
+                      v-else
+                      class="cover-frame cover-drag-handle w-110px flex flex-none items-center justify-center overflow-hidden rounded-9px bg-[var(--image-well-background)]"
+                      :class="{ 'drag-disabled': hasActiveFilters }"
+                      :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
+                      @pointerdown="beginCoverDrag(game.appId, $event)"
+                      @dragstart.prevent
+                    >
+                      <img
+                        class="cover-image block h-auto w-full"
+                        :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
+                        :src="game.coverUrl"
+                        :alt="game.appName"
+                        draggable="false"
+                      />
+                    </div>
+                    <button
                       v-if="game.coverUrl"
-                      :src="game.coverUrl"
-                      :alt="game.appName || '自定义游戏封面'"
-                      draggable="false"
-                    />
-                    <span v-else>上传封面</span>
-                  </button>
-                  <div
-                    v-else
-                    class="cover-frame cover-drag-handle"
-                    :class="{ 'drag-disabled': hasActiveFilters }"
-                    :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
-                    @pointerdown="beginCoverDrag(game.appId, $event)"
-                    @dragstart.prevent
-                  >
-                    <img :src="game.coverUrl" :alt="game.appName" draggable="false" />
+                      class="cover-blur-toggle absolute right-6px top-6px z-2 cursor-pointer border border-[rgba(255,255,255,0.38)] rounded-6px bg-[rgba(15,23,42,0.78)] px-7px py-4px text-11px font-800 leading-none text-white opacity-0 [font-family:inherit] transition-[opacity,background] duration-150"
+                      data-export-ignore="true"
+                      type="button"
+                      :aria-label="`${drafts[game.appId].coverBlurred ? '关闭' : '开启'}${game.appName || '自定义游戏'}的封面模糊`"
+                      :aria-pressed="drafts[game.appId].coverBlurred"
+                      @pointerdown.stop
+                      @click.stop="drafts[game.appId].coverBlurred = !drafts[game.appId].coverBlurred"
+                    >
+                      {{ drafts[game.appId].coverBlurred ? '清晰' : '模糊' }}
+                    </button>
                   </div>
                 </td>
                 <td>
-                  <div class="game-name-cell">
-                    <div v-if="isCustomGame(game)" class="custom-name-editor">
-                      <span class="book-title-mark">《</span>
+                  <div class="game-name-cell relative min-h-112px flex items-center justify-center">
+                    <div
+                      v-if="isCustomGame(game)"
+                      class="w-full grid items-center gap-2px [grid-template-columns:auto_minmax(0,1fr)_auto]"
+                    >
+                      <span class="font-800 text-[var(--text-bright)]">《</span>
                       <input
                         v-model="game.appName"
-                        class="custom-name-input"
+                        class="custom-name-input w-full min-w-0 border-0 bg-transparent px-2px py-8px text-center text-15px font-800 text-[var(--text-bright)] outline-none [font:inherit] placeholder:font-500 placeholder:text-[var(--text-faint)] focus:bg-[var(--accent-hover)]"
                         type="text"
                         aria-label="自定义游戏名"
                         placeholder="输入游戏名"
                       />
-                      <span class="book-title-mark">》</span>
+                      <span class="font-800 text-[var(--text-bright)]">》</span>
                     </div>
-                    <strong v-else class="game-name" :title="game.appName">
+                    <strong
+                      v-else
+                      class="block text-15px font-800 text-[var(--text-bright)] [overflow-wrap:anywhere]"
+                      :title="game.appName"
+                    >
                       《{{ game.appName }}》
                     </strong>
                     <button
@@ -933,20 +1215,23 @@ onBeforeUnmount(() => {
                 </td>
                 <td>
                   <button
-                    class="type-control"
+                    class="type-control min-h-112px w-full flex cursor-pointer items-center justify-center border-0 bg-transparent p-12px text-inherit outline-none hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
                     type="button"
                     :aria-label="`${game.appName}的游戏类型`"
                     :aria-expanded="typeMenu?.appId === game.appId"
                     @click="toggleTypeMenu(game.appId, $event)"
                   >
-                    <span v-if="drafts[game.appId].type.length === 0" class="type-placeholder">
+                    <span
+                      v-if="drafts[game.appId].type.length === 0"
+                      class="text-14px font-700 text-[var(--text-faint)]"
+                    >
                       选择类型
                     </span>
-                    <span v-else class="selected-types">
+                    <span v-else class="flex flex-wrap items-center justify-center gap-x-12px gap-y-8px">
                       <span
                         v-for="type in drafts[game.appId].type"
                         :key="type"
-                        class="type-label"
+                        class="text-14px font-800 leading-[1.35]"
                         :style="typeStyle(type)"
                       >
                         {{ typeLabel(type) }}
@@ -958,7 +1243,7 @@ onBeforeUnmount(() => {
                   <textarea
                     v-model="drafts[game.appId].experience"
                     v-resize-textarea
-                    class="review-field experience-field"
+                    class="block min-h-112px w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-14px py-12px text-center text-15px font-800 leading-[1.55] text-[var(--text-bright)] outline-none [font:inherit] placeholder:font-400 placeholder:text-[var(--text-faint)] focus:bg-[var(--accent-hover)]"
                     :aria-label="`${game.appName}的游玩体验`"
                     placeholder="记录画面、玩法、剧情和整体感受"
                     rows="1"
@@ -966,15 +1251,15 @@ onBeforeUnmount(() => {
                   ></textarea>
                 </td>
                 <td>
-                  <div class="duration-review-cell">
-                    <div class="duration-row">
-                      <span class="duration-label">时长：</span>
+                  <div class="min-h-112px grid [grid-template-rows:1fr_1fr]">
+                    <div class="grid items-center gap-8px [grid-template-columns:48px_minmax(0,1fr)]">
+                      <span class="text-12px font-800 text-[var(--text-muted)]">时长：</span>
                       <span
-                        class="duration-value"
+                        class="duration-value min-w-0 flex items-center justify-start gap-2px font-800 italic text-[var(--text-bright)]"
                         :class="durationClass(drafts[game.appId].duration)"
                       >
                         <input
-                          class="duration-field"
+                          class="duration-field inline-block w-5ch min-w-2ch whitespace-nowrap border-0 bg-transparent py-8px pl-0 pr-[0.25em] text-left leading-[1.5] text-inherit outline-none [font-family:inherit] [font-style:inherit] [font-weight:inherit] [text-shadow:inherit] placeholder:font-400 placeholder:not-italic placeholder:opacity-100 placeholder:text-[var(--text-faint)] placeholder:[text-shadow:none] focus:bg-transparent"
                           :class="{ empty: !drafts[game.appId].duration }"
                           :value="drafts[game.appId].duration"
                           type="text"
@@ -983,13 +1268,13 @@ onBeforeUnmount(() => {
                           placeholder="35"
                           @input="updateDuration(game.appId, $event)"
                         />
-                        <span class="duration-unit" aria-hidden="true">h</span>
+                        <span class="duration-unit flex-none pr-2px text-inherit [text-shadow:inherit]" aria-hidden="true">h</span>
                       </span>
                     </div>
-                    <div class="rating-row">
-                      <span class="rating-label">评价：</span>
+                    <div class="grid items-center gap-8px [grid-template-columns:48px_minmax(0,1fr)]">
+                      <span class="text-12px font-800 text-[var(--text-muted)]">评价：</span>
                       <div
-                        class="star-rating"
+                        class="star-rating flex items-center justify-center gap-2px"
                         :class="{
                           'max-rating':
                             (hoveredRating?.appId === game.appId
@@ -1002,7 +1287,7 @@ onBeforeUnmount(() => {
                         <button
                           v-for="star in 5"
                           :key="star"
-                          class="star-button"
+                          class="star-button cursor-pointer border-0 bg-transparent p-3px text-20px leading-none text-[var(--text-faint)] outline-none transition-[color,filter,text-shadow,transform] duration-120 hover:scale-116 focus-visible:scale-116"
                           :class="{
                             active:
                               star <=
@@ -1058,7 +1343,7 @@ onBeforeUnmount(() => {
                     </svg>
                   </button>
                   <button
-                    class="recommendation-control"
+                    class="recommendation-control min-h-112px w-full flex cursor-pointer items-center justify-center border-0 rounded-none bg-transparent p-0 text-inherit shadow-none outline-none transition-colors duration-150 hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
                     :class="recommendationClass(drafts[game.appId].recommendation)"
                     type="button"
                     :aria-label="`${game.appName}的推荐度`"
@@ -1076,25 +1361,36 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-else class="empty-state filtered-empty-state">
+        <div
+          v-else
+          class="filtered-empty-state flex justify-center gap-8px border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-32px text-center text-[var(--text-muted)]"
+        >
           没有符合当前条件的游戏。
           <button type="button" @click="clearFilters">清除筛选</button>
         </div>
 
-        <nav v-if="filteredGames.length > 0" class="pagination" aria-label="游戏测评分页">
-          <span class="pagination-summary">
+        <nav
+          v-if="filteredGames.length > 0"
+          class="flex flex-wrap items-center justify-between gap-12px px-16px py-14px text-13px font-700 text-[var(--text-muted)]"
+          aria-label="游戏测评分页"
+        >
+          <span>
             第 {{ visibleRangeStart }}–{{ visibleRangeEnd }} 条，共 {{ filteredGames.length }} 条
           </span>
-          <div class="pagination-controls">
+          <div class="flex items-center gap-10px">
             <button
+              class="cursor-pointer border border-[var(--border-strong)] rounded-8px bg-[var(--input-background)] px-11px py-7px text-[var(--text-bright)] hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
               :disabled="currentPage === 1"
               @click="currentPage -= 1"
             >
               上一页
             </button>
-            <span class="pagination-page">{{ currentPage }} / {{ totalPages }}</span>
+            <span class="min-w-58px text-center text-[var(--text-bright)]">
+              {{ currentPage }} / {{ totalPages }}
+            </span>
             <button
+              class="cursor-pointer border border-[var(--border-strong)] rounded-8px bg-[var(--input-background)] px-11px py-7px text-[var(--text-bright)] hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
               :disabled="currentPage === totalPages"
               @click="currentPage += 1"
@@ -1102,9 +1398,12 @@ onBeforeUnmount(() => {
               下一页
             </button>
           </div>
-          <label class="page-size-control">
+          <label class="flex items-center gap-7px">
             每页
-            <select v-model.number="pageSize">
+            <select
+              v-model.number="pageSize"
+              class="border border-[var(--border-strong)] rounded-8px bg-[var(--input-background)] px-11px py-7px text-[var(--text-bright)] focus-visible:border-[var(--accent-border)] focus-visible:outline-none"
+            >
               <option v-for="size in pageSizeOptions" :key="size" :value="size">
                 {{ size }} 条
               </option>
@@ -1112,8 +1411,14 @@ onBeforeUnmount(() => {
           </label>
         </nav>
 
-        <div v-if="currentPage === totalPages" class="add-custom-row">
-          <button type="button" @click="addCustomGame">＋ 添加自定义游戏</button>
+        <div v-if="currentPage === totalPages" class="flex justify-center pt-4px">
+          <button
+            class="cursor-pointer border border-[var(--border-strong)] rounded-9px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] outline-none hover:border-current focus-visible:border-current"
+            type="button"
+            @click="addCustomGame"
+          >
+            ＋ 添加自定义游戏
+          </button>
         </div>
       </div>
     </section>
@@ -1121,12 +1426,12 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div
         v-if="typeMenu || recommendationMenu"
-        class="recommendation-backdrop"
+        class="fixed inset-0 z-99 bg-transparent"
         @click="typeMenu = null; recommendationMenu = null"
       ></div>
       <div
         v-if="typeMenu"
-        class="type-menu"
+        class="type-menu fixed z-100 grid max-h-[min(360px,calc(100vh-24px))] grid-cols-2 gap-4px overflow-y-auto border-0 rounded-12px bg-[var(--panel-background-solid)] p-8px shadow-[0_16px_36px_rgba(0,0,0,0.42)]"
         :style="{
           top: `${typeMenu.top}px`,
           left: `${typeMenu.left}px`,
@@ -1138,7 +1443,7 @@ onBeforeUnmount(() => {
         <button
           v-for="type in typeOptions"
           :key="type.id"
-          class="type-option"
+          class="type-option min-h-42px flex cursor-pointer items-center justify-between gap-8px border-0 rounded-8px bg-transparent px-10px py-8px text-14px font-800 text-inherit"
           :style="typeStyle(type.id)"
           type="button"
           role="option"
@@ -1146,12 +1451,17 @@ onBeforeUnmount(() => {
           @click="toggleGameType(typeMenu.appId, type.id)"
         >
           <span>{{ type.label }}</span>
-          <span v-if="drafts[typeMenu.appId].type.includes(type.id)" class="type-check">✓</span>
+          <span
+            v-if="drafts[typeMenu.appId].type.includes(type.id)"
+            class="text-[var(--text-bright)]"
+          >
+            ✓
+          </span>
         </button>
       </div>
       <div
         v-if="recommendationMenu"
-        class="recommendation-menu"
+        class="recommendation-menu fixed z-100 grid max-h-[min(320px,calc(100vh-24px))] overflow-y-auto border-0 rounded-12px bg-[var(--panel-background-solid)] p-6px shadow-[0_16px_36px_rgba(0,0,0,0.42)]"
         :style="{
           top: `${recommendationMenu.top}px`,
           left: `${recommendationMenu.left}px`,
@@ -1162,7 +1472,7 @@ onBeforeUnmount(() => {
         <button
           v-for="recommendation in recommendationOptions"
           :key="recommendation || 'empty'"
-          class="recommendation-option"
+          class="recommendation-option min-h-42px flex cursor-pointer items-center justify-center border-0 rounded-8px bg-transparent px-12px py-8px text-inherit"
           :class="recommendationClass(recommendation)"
           type="button"
           role="option"
@@ -1177,200 +1487,36 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.review-page {
-  min-height: 100vh;
-  padding: 40px;
-  background:
-    var(--page-background);
-}
-
-.review-header,
-.review-content {
-  max-width: 1180px;
-  margin: 0 auto;
-}
-
-.review-header {
-  padding: 32px;
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: var(--panel-background);
-  box-shadow: var(--shadow-panel);
-}
-
-.review-header h1 {
-  margin: 0 0 12px;
-  font-size: 36px;
-}
-
-.review-header p {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.7;
-}
-
-.review-content {
-  margin-top: 24px;
-}
-
-.review-results {
-  display: grid;
-  gap: 14px;
-}
-
-.review-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.export-button {
-  padding: 9px 18px;
-  border: 1px solid var(--accent-border);
-  border-radius: 10px;
-  color: var(--accent-text);
-  background: var(--accent);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
 .export-button:hover:not(:disabled),
 .export-button:focus-visible:not(:disabled) {
   filter: brightness(1.08);
   outline: none;
 }
 
-.export-button:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-
-.export-error {
-  margin: 0;
-  color: var(--danger-text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .filter-bar {
-  display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr) auto;
   grid-template-areas:
     'search recommendation summary'
     'divider divider divider'
     'types types types';
-  gap: 14px 18px;
-  padding: 16px 18px;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--panel-background);
-  box-shadow: var(--shadow-panel);
 }
 
 .game-name-search {
   grid-area: search;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.game-name-search input {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  color: var(--text-bright);
-  background: var(--input-background);
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-}
-
-.game-name-search input:focus {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.game-name-search input::placeholder {
-  color: var(--text-faint);
-}
-
-.filter-group {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
 }
 
 .type-filter-group {
   grid-area: types;
-  width: 100%;
-  align-items: flex-start;
-}
-
-.type-filter-group .filter-options {
-  flex: 1 1 auto;
 }
 
 .recommendation-filter-group {
   grid-area: recommendation;
 }
 
-.filter-heading {
-  flex: 0 0 auto;
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.filter-options {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.filter-chip {
-  min-height: 30px;
-  padding: 5px 9px;
-  border: 1px solid var(--border-soft);
-  border-radius: 7px;
-  color: var(--text-muted);
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.filter-chip:hover {
-  border-color: var(--border-strong);
-  background: var(--accent-hover);
-}
-
-.filter-chip:focus-visible {
-  border-color: var(--border-strong);
-  background: var(--accent-hover);
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
-}
-
 .filter-chip.is-selected {
   border-color: currentColor;
   background: var(--accent-hover);
   box-shadow: inset 0 -2px currentColor;
-}
-
-.recommendation-filter-chip {
-  width: 34px;
-  padding-inline: 4px;
 }
 
 .recommendation-filter-chip .recommendation-label {
@@ -1380,21 +1526,10 @@ onBeforeUnmount(() => {
 
 .filter-divider {
   grid-area: divider;
-  width: 100%;
-  height: 1px;
-  background: var(--border-soft);
 }
 
 .filter-summary {
   grid-area: summary;
-  display: grid;
-  min-width: 74px;
-  justify-items: end;
-  gap: 4px;
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .filter-summary button,
@@ -1415,109 +1550,6 @@ onBeforeUnmount(() => {
   border-radius: 3px;
   outline: 2px solid currentColor;
   outline-offset: 3px;
-}
-
-.filtered-empty-state {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-
-.custom-empty-state {
-  display: grid;
-  justify-items: center;
-  gap: 16px;
-}
-
-.custom-empty-state button,
-.add-custom-row button {
-  padding: 9px 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  color: var(--text-bright);
-  background: var(--accent-hover);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.custom-empty-state button:hover,
-.custom-empty-state button:focus-visible,
-.add-custom-row button:hover,
-.add-custom-row button:focus-visible {
-  border-color: currentColor;
-  outline: none;
-}
-
-.pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.pagination button,
-.page-size-control select {
-  padding: 7px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text-bright);
-  background: var(--input-background);
-  font: inherit;
-}
-
-.pagination button {
-  cursor: pointer;
-}
-
-.pagination button:hover:not(:disabled),
-.pagination button:focus-visible,
-.page-size-control select:focus-visible {
-  border-color: var(--accent-border);
-  outline: none;
-}
-
-.pagination button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.pagination-page {
-  min-width: 58px;
-  color: var(--text-bright);
-  text-align: center;
-}
-
-.page-size-control {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.add-custom-row {
-  display: flex;
-  justify-content: center;
-  padding-top: 4px;
-}
-
-.table-scroll {
-  width: 100%;
-  padding-right: 12px;
-  overflow-x: auto;
-  box-sizing: content-box;
-  background: transparent
 }
 
 .review-table {
@@ -1644,130 +1676,25 @@ onBeforeUnmount(() => {
     0 4px 12px rgba(161, 98, 7, 0.1);
 }
 
-.cover-column {
-  width: 142px;
+.cover-image {
+  transition: filter 0.18s ease, transform 0.18s ease;
 }
 
-.game-name-column {
-  width: 180px;
+.cover-image.is-blurred {
+  filter: blur(6px);
+  transform: scale(1.12);
 }
 
-.experience-column {
-  width: 250px;
+.cover-wrapper:hover .cover-blur-toggle,
+.cover-blur-toggle:focus-visible {
+  opacity: 1;
 }
 
-.cover-cell {
-  padding: 12px;
-}
-
-.cover-frame {
-  display: flex;
-  width: 110px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 9px;
-  background: var(--image-well-background);
-}
-
-.cover-frame img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.missing-cover {
-  display: flex;
-  min-height: 68px;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.custom-cover-button {
-  display: flex;
-  width: 110px;
-  min-height: 68px;
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px dashed var(--border-strong);
-  border-radius: 9px;
-  color: var(--text-muted);
-  background: var(--image-well-background);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.custom-cover-button:hover,
-.custom-cover-button:focus-visible {
-  border-color: var(--text-bright);
-  color: var(--text-bright);
+.cover-blur-toggle:hover,
+.cover-blur-toggle:focus-visible,
+.cover-blur-toggle[aria-pressed='true'] {
+  background: rgba(2, 132, 199, 0.9);
   outline: none;
-}
-
-.custom-cover-button img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.game-name {
-  display: block;
-  overflow-wrap: anywhere;
-  color: var(--text-bright);
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.game-name-cell {
-  position: relative;
-  display: flex;
-  min-height: 112px;
-  align-items: center;
-  justify-content: center;
-}
-
-.custom-name-editor {
-  display: grid;
-  width: 100%;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 2px;
-}
-
-.book-title-mark {
-  color: var(--text-bright);
-  font-weight: 800;
-}
-
-.custom-name-input {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 2px;
-  border: 0;
-  color: var(--text-bright);
-  background: transparent;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 800;
-  text-align: center;
-  outline: none;
-}
-
-.custom-name-input::placeholder {
-  color: var(--text-faint);
-  font-weight: 500;
-}
-
-.custom-name-input:focus {
-  background: var(--accent-hover);
 }
 
 .delete-game-button {
@@ -1806,209 +1733,9 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.type-control {
-  display: flex;
-  width: 100%;
-  min-height: 112px;
-  padding: 12px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-}
-
-.type-control:hover,
-.type-control:focus-visible {
-  background: var(--accent-hover);
-}
-
-.type-placeholder {
-  color: var(--text-faint);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.selected-types {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px 12px;
-}
-
-.type-label {
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.type-menu {
-  position: fixed;
-  z-index: 100;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  max-height: min(360px, calc(100vh - 24px));
-  padding: 8px;
-  overflow-y: auto;
-  border: 0;
-  border-radius: 12px;
-  background: var(--panel-background-solid);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.42);
-}
-
-.type-option {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  color: inherit;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
 .type-option:hover,
 .type-option[aria-selected='true'] {
   background: var(--accent-hover);
-}
-
-.type-check {
-  color: var(--text-bright);
-}
-
-.review-field {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  min-height: 112px;
-  padding: 12px 14px;
-  border: 0;
-  color: var(--text-bright);
-  background: transparent;
-  font: inherit;
-  line-height: 1.55;
-  text-align: center;
-  outline: none;
-}
-
-.experience-field {
-  overflow: hidden;
-  font-size: 15px;
-  font-weight: 800;
-  resize: none;
-}
-
-.duration-review-cell {
-  display: grid;
-  min-height: 112px;
-  grid-template-rows: 1fr 1fr;
-}
-
-.duration-row,
-.rating-row {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.duration-label,
-.rating-label {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.duration-value {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 2px;
-  color: var(--text-bright);
-  font-style: italic;
-  font-weight: 800;
-}
-
-.duration-field {
-  display: inline-block;
-  width: 5ch;
-  min-width: 2ch;
-  padding: 8px 0.25em 8px 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  font-style: inherit;
-  font-weight: inherit;
-  line-height: 1.5;
-  text-align: left;
-  text-shadow: inherit;
-  white-space: nowrap;
-  outline: none;
-}
-
-.duration-field:focus {
-  background: transparent;
-}
-
-.duration-field::placeholder {
-  color: var(--text-faint);
-  font-style: normal;
-  font-weight: 400;
-  text-shadow: none;
-  opacity: 1;
-}
-
-.duration-unit {
-  flex: 0 0 auto;
-  color: inherit;
-  text-shadow: inherit;
-  padding-right: 2px;
-}
-
-.star-rating {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-
-.star-button {
-  padding: 3px;
-  border: 0;
-  color: var(--text-faint);
-  background: transparent;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  outline: none;
-  transition: color 0.12s ease, filter 0.12s ease, text-shadow 0.12s ease, transform 0.12s ease;
-}
-
-.star-button:hover,
-.star-button:focus-visible {
-  transform: scale(1.16);
 }
 
 .star-button.active {
@@ -2025,15 +1752,6 @@ onBeforeUnmount(() => {
     0 1px 0 #a40012,
     0 0 8px rgba(255, 45, 32, 0.72),
     0 0 16px rgba(190, 0, 24, 0.42);
-}
-
-.review-field::placeholder {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-.review-field:focus {
-  background: var(--accent-hover);
 }
 
 .duration-green {
@@ -2170,66 +1888,11 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 1px 2px rgba(127, 29, 29, 0.2));
 }
 
-.recommendation-control {
-  display: flex;
-  width: 100%;
-  min-height: 112px;
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 0;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-  box-shadow: none;
-  transition: background 0.15s ease;
-}
-
-.recommendation-control:hover,
-.recommendation-control:focus-visible {
-  background: var(--accent-hover);
-}
-
 .recommendation-label {
   font-size: 30px;
   font-weight: 900;
   line-height: 1;
   pointer-events: none;
-}
-
-.recommendation-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-  background: transparent;
-}
-
-.recommendation-menu {
-  position: fixed;
-  z-index: 100;
-  display: grid;
-  max-height: min(320px, calc(100vh - 24px));
-  padding: 6px;
-  overflow-y: auto;
-  border: 0;
-  border-radius: 12px;
-  background: var(--panel-background-solid);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.42);
-}
-
-.recommendation-option {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 8px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
 }
 
 .recommendation-option:hover,
@@ -2248,49 +1911,40 @@ onBeforeUnmount(() => {
 }
 
 .grade-c .recommendation-label {
-  color: #94a3b8;
+  color: var(--grade-c);
 }
 
 .grade-c-plus .recommendation-label {
-  color: #5eead4;
+  color: var(--grade-c-plus);
 }
 
 .grade-b .recommendation-label {
-  color: #60a5fa;
+  color: var(--grade-b);
 }
 
 .grade-b-plus .recommendation-label {
-  color: #22d3ee;
+  color: var(--grade-b-plus);
 }
 
 .grade-a .recommendation-label {
-  color: #a78bfa;
+  color: var(--grade-a);
 }
 
 .grade-a-plus .recommendation-label {
-  color: #f472b6;
+  color: var(--grade-a-plus);
 }
 
 .grade-s .recommendation-label {
-  color: #facc15;
+  color: var(--grade-s);
   text-shadow: 0 0 18px rgba(250, 204, 21, 0.3);
 }
 
 .grade-s-plus .recommendation-label {
   color: transparent;
-  background: linear-gradient(90deg, #f87171, #facc15, #4ade80, #38bdf8, #a78bfa, #f472b6);
+  background: var(--grade-s-plus-gradient);
   background-clip: text;
   -webkit-background-clip: text;
   text-shadow: 0 0 22px rgba(167, 139, 250, 0.3);
-}
-
-.empty-state {
-  padding: 32px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 20px;
-  color: var(--text-muted);
-  background: var(--panel-background-soft);
-  text-align: center;
 }
 
 @media (max-width: 980px) {

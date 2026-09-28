@@ -37,6 +37,11 @@ function normalize(parsed: Partial<TierList>): TierList {
 
 function isTierEntry(value: unknown): value is TierList[keyof TierList][number] {
   if (typeof value !== 'object' || value === null) return false
-  const o = value as { id?: unknown; src?: unknown; label?: unknown }
-  return typeof o.id === 'string' && typeof o.src === 'string' && typeof o.label === 'string'
+  const o = value as { id?: unknown; src?: unknown; label?: unknown; appId?: unknown }
+  return (
+    typeof o.id === 'string' &&
+    typeof o.src === 'string' &&
+    typeof o.label === 'string' &&
+    (o.appId === undefined || typeof o.appId === 'string')
+  )
 }

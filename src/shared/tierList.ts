@@ -6,6 +6,7 @@ export interface TierEntry {
   id: string
   src: string
   label: string
+  appId?: string
 }
 
 export interface TierList {

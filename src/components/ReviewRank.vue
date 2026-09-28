@@ -10,13 +10,22 @@ import {
   type TierKey,
   type TierList,
 } from '../shared/tierList'
+import type { ImageAsset } from '../shared/imageLibrary'
+import { loadGameReviews } from '../shared/gameReviewStorage'
 import { takeReviewPool } from '../shared/reviewPool'
 import { pickLocalImages } from '../shared/localImagePicker'
 
+const props = defineProps<{
+  images: ImageAsset[]
+}>()
+
 const list = ref<TierList>(emptyTierList())
+const isLoadingList = ref(true)
 const isImporting = ref(false)
+const isImportingReviews = ref(false)
 const isExporting = ref(false)
 const errorMessage = ref('')
+const importMessage = ref('')
 const isPoolOpen = ref(false)
 const pyramidEl = ref<HTMLElement | null>(null)
 
@@ -30,13 +39,19 @@ const tierWidths: Record<string, number> = {
   pool: 104,
 }
 
-const tierColors: Record<string, string> = {
-  夯: 'var(--accent)',
-  顶级: 'var(--tier-top)',
-  人上人: 'var(--tier-elite)',
-  NPC: 'var(--tier-npc)',
-  拉: 'var(--tier-low)',
-  pool: 'var(--text-muted)',
+const tierStyles: Record<string, Record<string, string>> = {
+  夯: {
+    color: 'transparent',
+    background: 'var(--grade-s-plus-gradient)',
+    backgroundClip: 'text',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+  },
+  顶级: { color: 'var(--grade-s)' },
+  人上人: { color: 'var(--grade-a-plus)' },
+  NPC: { color: 'var(--grade-a)' },
+  拉: { color: 'var(--grade-b)' },
+  pool: { color: 'var(--grade-c)' },
 }
 
 function tierLabel(tier: string): string {
@@ -55,20 +70,28 @@ onMounted(async () => {
   // 先取走 pool 里的图（不依赖持久化），保证「加入评测」或导入的图一定能显示
   const incoming = takeReviewPool()
 
-  let loaded: TierList
   try {
-    loaded = await window.imageLibrary.loadTierList()
-  } catch {
-    loaded = emptyTierList()
-  }
+    let loaded: TierList
+    try {
+      loaded = await window.imageLibrary.loadTierList()
+    } catch {
+      loaded = emptyTierList()
+    }
 
-  let next = loaded
-  for (const entry of incoming) next = addToPool(next, entry)
-  list.value = next
-  if (incoming.length > 0) scheduleSave()
+    let next = loaded
+    for (const entry of incoming) next = addToPool(next, entry)
+    list.value = next
+    if (incoming.length > 0) {
+      isPoolOpen.value = true
+      scheduleSave()
+    }
+  } finally {
+    isLoadingList.value = false
+  }
 })
 
 async function importLocalImages(): Promise<void> {
+  if (isLoadingList.value) return
   isImporting.value = true
   errorMessage.value = ''
   try {
@@ -84,6 +107,100 @@ async function importLocalImages(): Promise<void> {
     errorMessage.value = '导入图片失败'
   } finally {
     isImporting.value = false
+  }
+}
+
+function tierForRating(rating: number): TierKey | null {
+  const tiers: Record<number, TierKey> = {
+    5: '夯',
+    4: '顶级',
+    3: '人上人',
+    2: 'NPC',
+    1: '拉',
+    0: '拉'
+  }
+  return tiers[rating] ?? null
+}
+
+function imageByAppId(): Map<string, ImageAsset> {
+  const images = new Map<string, ImageAsset>()
+  for (const image of props.images) {
+    if (image.appId && !images.has(image.appId)) images.set(image.appId, image)
+  }
+  return images
+}
+
+function appIdByImageUrl(): Map<string, string> {
+  const appIds = new Map<string, string>()
+  for (const image of props.images) {
+    if (image.appId) appIds.set(image.fileUrl, image.appId)
+  }
+  return appIds
+}
+
+function importGameReviews(): void {
+  if (isLoadingList.value || isImportingReviews.value) return
+  isImportingReviews.value = true
+  errorMessage.value = ''
+  importMessage.value = ''
+
+  try {
+    const reviews = loadGameReviews(window.localStorage)
+    const imagesByAppId = imageByAppId()
+    const appIdsByUrl = appIdByImageUrl()
+    const existingAppIds = new Set<string>()
+
+    for (const tier of [...TIER_ORDER, 'pool'] as TierKey[]) {
+      for (const entry of list.value[tier]) {
+        const appId = entry.appId ?? appIdsByUrl.get(entry.src)
+        if (appId) existingAppIds.add(appId)
+      }
+    }
+
+    let next: TierList = {
+      夯: [...list.value.夯],
+      顶级: [...list.value.顶级],
+      人上人: [...list.value.人上人],
+      NPC: [...list.value.NPC],
+      拉: [...list.value.拉],
+      pool: [...list.value.pool],
+    }
+    let imported = 0
+    let updated = 0
+    let skipped = 0
+
+    for (const [appId, review] of Object.entries(reviews)) {
+      const tier = tierForRating(review.rating)
+      if (!tier || appId.startsWith('custom-')) {
+        skipped += 1
+        continue
+      }
+
+      for (const key of [...TIER_ORDER, 'pool'] as TierKey[]) {
+        next[key] = next[key].filter((entry) => {
+          const entryAppId = entry.appId ?? appIdsByUrl.get(entry.src)
+          return entryAppId !== appId
+        })
+      }
+
+      const image = imagesByAppId.get(appId)
+      next[tier].push({
+        id: `steam-app-${appId}`,
+        appId,
+        src: review.coverUrl || image?.fileUrl || '',
+        label: review.appName,
+      })
+      if (existingAppIds.has(appId)) updated += 1
+      else imported += 1
+    }
+
+    list.value = next
+    scheduleSave()
+    importMessage.value = `新增 ${imported} 个，更新 ${updated} 个，跳过 ${skipped} 个`
+  } catch {
+    errorMessage.value = '获取游戏测评数据失败'
+  } finally {
+    isImportingReviews.value = false
   }
 }
 
@@ -163,16 +280,31 @@ function waitImagesLoaded(root: HTMLElement): Promise<void> {
 </script>
 
 <template>
-  <main class="review-shell">
-    <section class="hero-panel">
-      <h1>游戏评测排名</h1>
-      <p class="description">导入游戏图片，拖到对应档位排出你的个人金字塔。</p>
-      <div class="review-controls">
-        <button type="button" :disabled="isImporting" @click="importLocalImages">
+  <main class="min-h-screen bg-[var(--page-background)]">
+    <section class="border-b border-[var(--border)] bg-[var(--panel-background)] px-40px py-32px">
+      <h1 class="m-0 mb-12px text-32px">游戏评测排名</h1>
+      <p class="m-0 text-[var(--text-secondary)] [line-height:1.7]">
+        导入游戏图片，拖到对应档位排出你的个人金字塔。
+      </p>
+      <div class="mt-24px flex gap-12px">
+        <button
+          class="cursor-pointer border-0 rounded-12px bg-[var(--accent)] px-18px py-8px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-50"
+          type="button"
+          :disabled="isLoadingList || isImportingReviews"
+          @click="importGameReviews"
+        >
+          {{ isLoadingList ? '加载排名中…' : isImportingReviews ? '获取中…' : '获取游戏测评数据' }}
+        </button>
+        <button
+          class="cursor-pointer border-0 rounded-12px bg-[var(--accent)] px-18px py-8px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-50"
+          type="button"
+          :disabled="isLoadingList || isImporting"
+          @click="importLocalImages"
+        >
           {{ isImporting ? '导入中…' : '导入图片' }}
         </button>
         <button
-          class="secondary"
+          class="cursor-pointer border border-[var(--accent-border)] rounded-12px bg-[var(--accent-background)] px-18px py-8px font-800 text-[var(--text-soft)] disabled:cursor-wait disabled:opacity-50"
           type="button"
           :disabled="isExporting"
           @click="exportPng"
@@ -182,26 +314,36 @@ function waitImagesLoaded(root: HTMLElement): Promise<void> {
       </div>
     </section>
 
-    <section class="content-panel">
-      <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+    <section class="px-40px py-24px">
+      <p v-if="errorMessage" class="text-[var(--danger-text)]">{{ errorMessage }}</p>
+      <p
+        v-if="importMessage"
+        class="text-14px font-700 text-[var(--success-text)]"
+        role="status"
+      >
+        {{ importMessage }}
+      </p>
 
       <!-- 金字塔：五档纵向，全宽 -->
-      <div ref="pyramidEl" class="pyramid-col">
+      <div ref="pyramidEl" class="min-w-0">
         <div
           v-for="tier in TIER_ORDER"
           :key="tier"
-          class="tier-row"
+          class="mb-20px flex items-center gap-16px border border-[var(--border-soft)] rounded-14px bg-[var(--row-background)] px-16px py-14px"
           @dragover="onDragOver"
           @drop="onDrop(tier, list[tier].length)"
         >
-          <h2 class="tier-head" :style="{ color: tierColors[tier] }">
-            {{ tierLabel(tier) }} <span class="count">{{ list[tier].length }}</span>
+          <h2
+            class="m-0 flex flex-[0_0_84px] flex-col items-center justify-center gap-4px text-center text-18px"
+          >
+            <span :style="tierStyles[tier]">{{ tierLabel(tier) }}</span>
+            <span class="text-13px text-[var(--text-muted)]">{{ list[tier].length }}</span>
           </h2>
-          <div class="cover-row">
+          <div class="min-h-60px min-w-0 flex flex-[1_1_auto] flex-wrap items-start gap-10px">
             <div
               v-for="(entry, idx) in list[tier]"
               :key="entry.id"
-              class="cover"
+              class="relative cursor-grab overflow-hidden rounded-8px bg-[var(--image-well-background)] active:cursor-grabbing"
               :style="{ width: tierWidths[tier] + 'px' }"
               draggable="true"
               @dragstart="onDragStart(tier, idx, $event)"
@@ -209,232 +351,100 @@ function waitImagesLoaded(root: HTMLElement): Promise<void> {
               @drop="onDrop(tier, idx)"
               @dragend="onDragEnd"
             >
-              <img :src="entry.src" :alt="entry.label" loading="lazy" draggable="false" />
-              <div class="cover-meta">{{ entry.label }}</div>
+              <img
+                v-if="entry.src"
+                class="block h-auto w-full"
+                :src="entry.src"
+                :alt="entry.label"
+                loading="lazy"
+                draggable="false"
+              />
+              <div
+                v-else
+                class="min-h-68px flex items-center justify-center bg-[var(--image-well-background)] px-8px pb-24px pt-10px text-center text-12px font-800 leading-[1.35] text-[var(--text-soft)] [overflow-wrap:anywhere]"
+              >
+                {{ entry.label }}
+              </div>
+              <div
+                class="absolute inset-x-0 bottom-0 overflow-hidden text-ellipsis whitespace-nowrap px-6px py-3px text-center text-11px text-[var(--image-overlay-text)] [background:linear-gradient(transparent,rgba(0,0,0,0.85))]"
+              >
+                {{ entry.label }}
+              </div>
             </div>
-            <div v-if="list[tier].length === 0" class="empty-hint">拖到这里</div>
+            <div
+              v-if="list[tier].length === 0"
+              class="self-center text-13px text-[var(--text-faint)]"
+            >
+              拖到这里
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- 右侧待分区抽屉 -->
-    <div class="pool-drawer" :class="{ open: isPoolOpen }">
+    <div
+      class="fixed inset-y-0 right-0 z-30 flex translate-x-[calc(100%_-_42px)] transition-transform duration-[220ms]"
+      :class="{ '!translate-x-0': isPoolOpen }"
+    >
       <button
-        class="pool-tab"
+        class="w-42px flex flex-none cursor-pointer flex-col items-center justify-center self-center gap-8px border border-r-0 border-[var(--border)] rounded-[12px_0_0_12px] bg-[var(--nav-background)] px-4px py-12px text-[var(--text-soft)] hover:text-[var(--accent)]"
         type="button"
         :title="isPoolOpen ? '收起待分区' : '展开待分区'"
         @click="isPoolOpen = !isPoolOpen"
       >
-        <span class="pool-tab-text">待分区 {{ list.pool.length }}</span>
-        <span class="pool-tab-arrow">{{ isPoolOpen ? '›' : '‹' }}</span>
+        <span class="flex flex-col items-center text-14px font-800 tracking-[0.1em]" aria-hidden="true">
+          <span>待</span>
+          <span>分</span>
+          <span>区</span>
+        </span>
+        <span
+          class="min-w-22px h-22px inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-5px text-12px font-900 leading-none text-[var(--accent-text)]"
+          aria-label="待分区数量"
+        >
+          {{ list.pool.length }}
+        </span>
+        <span class="text-18px leading-none" aria-hidden="true">{{ isPoolOpen ? '›' : '‹' }}</span>
       </button>
       <aside
-        class="pool-col"
+        class="flex flex-[0_0_300px] flex-col overflow-y-auto border-l border-[var(--border)] bg-[var(--nav-background)] p-16px"
         @dragover="onDragOver"
         @drop="onDrop('pool', list.pool.length)"
       >
-        <div class="pool-covers">
+        <div
+          class="grid flex-1 content-start gap-10px [grid-template-columns:repeat(auto-fill,minmax(88px,1fr))]"
+        >
           <div
             v-for="(entry, idx) in list.pool"
             :key="entry.id"
-            class="cover pool-cover"
+            class="relative w-full cursor-grab overflow-hidden rounded-8px bg-[var(--image-well-background)] active:cursor-grabbing"
             draggable="true"
             @dragstart="onDragStart('pool', idx, $event)"
             @dragover="(e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'move' }"
             @drop="onDrop('pool', idx)"
             @dragend="onDragEnd"
           >
-            <img :src="entry.src" :alt="entry.label" loading="lazy" draggable="false" />
-            <div class="cover-meta">{{ entry.label }}</div>
+            <img
+              class="block h-auto w-full"
+              :src="entry.src"
+              :alt="entry.label"
+              loading="lazy"
+              draggable="false"
+            />
+            <div
+              class="absolute inset-x-0 bottom-0 overflow-hidden text-ellipsis whitespace-nowrap px-6px py-3px text-center text-11px text-[var(--image-overlay-text)] [background:linear-gradient(transparent,rgba(0,0,0,0.85))]"
+            >
+              {{ entry.label }}
+            </div>
           </div>
-          <div v-if="list.pool.length === 0" class="empty-hint">拖到这里</div>
+          <div
+            v-if="list.pool.length === 0"
+            class="self-center text-13px text-[var(--text-faint)]"
+          >
+            拖到这里
+          </div>
         </div>
       </aside>
     </div>
   </main>
 </template>
-
-<style scoped>
-.review-shell {
-  min-height: 100vh;
-  background: var(--page-background);
-}
-.hero-panel {
-  padding: 32px 40px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-background);
-}
-.content-panel {
-  padding: 24px 40px;
-}
-h1 {
-  margin: 0 0 12px;
-  font-size: 32px;
-}
-.description {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.7;
-}
-.review-controls {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-}
-.review-controls button {
-  padding: 8px 18px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 800;
-  cursor: pointer;
-}
-.review-controls button.secondary {
-  background: var(--accent-background);
-  border: 1px solid var(--accent-border);
-  color: var(--text-soft);
-}
-.review-controls button:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-.pyramid-col {
-  min-width: 0;
-}
-
-/* --- 右侧待分区抽屉 --- */
-.pool-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  display: flex;
-  transform: translateX(calc(100% - 34px));
-  transition: transform 0.22s ease;
-}
-.pool-drawer.open {
-  transform: translateX(0);
-}
-.pool-tab {
-  align-self: center;
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 34px;
-  padding: 12px 0;
-  border: 1px solid var(--border);
-  border-right: 0;
-  border-radius: 12px 0 0 12px;
-  background: var(--nav-background);
-  color: var(--text-soft);
-  cursor: pointer;
-  writing-mode: vertical-rl;
-}
-.pool-tab:hover {
-  color: var(--accent);
-}
-.pool-tab-text {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-}
-.pool-tab-arrow {
-  font-size: 16px;
-}
-.pool-col {
-  flex: 0 0 300px;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  border-left: 1px solid var(--border);
-  background: var(--nav-background);
-  overflow-y: auto;
-}
-.pool-covers {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-  align-content: start;
-  gap: 10px;
-}
-.pool-cover {
-  width: 100%;
-}
-.error-text {
-  color: var(--danger-text);
-}
-.tier-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: var(--row-background);
-}
-.tier-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  flex: 0 0 84px;
-  margin: 0;
-  font-size: 18px;
-  text-align: center;
-}
-.tier-head .count {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.cover-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 60px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.cover {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--image-well-background);
-  cursor: grab;
-}
-.cover:active {
-  cursor: grabbing;
-}
-.cover img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.cover-meta {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 3px 6px;
-  font-size: 11px;
-  color: var(--image-overlay-text);
-  text-align: center;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.empty-hint {
-  align-self: center;
-  color: var(--text-faint);
-  font-size: 13px;
-}
-</style>

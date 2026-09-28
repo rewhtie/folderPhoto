@@ -173,38 +173,77 @@ async function exportCollage(): Promise<void> {
 </script>
 
 <template>
-  <div class="collage-backdrop" @click.self="emit('close')">
-    <div class="collage-dialog">
-      <h3>拼图</h3>
-      <p>已选 {{ n }} 张图片（拖拽可调整位置）</p>
+  <div
+    class="fixed inset-0 z-10 flex items-center justify-center bg-[var(--backdrop)]"
+    @click.self="emit('close')"
+  >
+    <div
+      class="max-h-90vh w-640px max-w-92vw overflow-y-auto border border-[var(--border)] rounded-18px bg-[var(--panel-background-solid)] p-24px [box-shadow:var(--shadow-dialog)]"
+    >
+      <h3 class="m-0 mb-8px">拼图</h3>
+      <p class="m-0 mb-16px text-14px text-[var(--text-muted)]">
+        已选 {{ n }} 张图片（拖拽可调整位置）
+      </p>
 
-      <div class="collage-toolbar">
-        <button class="ghost-button" type="button" @click="pickLocalImages">导入本地图片</button>
+      <div class="mb-14px">
+        <button class="ghost-button" type="button" @click="pickLocalImages">
+          导入本地图片
+        </button>
       </div>
 
-      <p v-if="n === 0" class="collage-empty">请导入本地图片开始拼图</p>
+      <p
+        v-if="n === 0"
+        class="m-0 mb-16px border border-[var(--border-strong)] rounded-8px border-dashed p-24px text-center text-14px text-[var(--text-muted)]"
+      >
+        请导入本地图片开始拼图
+      </p>
 
-      <div class="collage-fields">
-        <label>
+      <div class="mb-18px flex flex-wrap gap-16px">
+        <label class="flex items-center gap-6px text-13px text-[var(--text-muted)]">
           行
-          <input v-model.number="rows" type="number" min="1" max="20" class="collage-input" />
+          <input
+            v-model.number="rows"
+            type="number"
+            min="1"
+            max="20"
+            class="w-96px border border-[var(--border)] rounded-8px bg-[var(--input-background-soft)] px-10px py-6px text-14px text-[var(--text-primary)]"
+          />
         </label>
-        <label>
+        <label class="flex items-center gap-6px text-13px text-[var(--text-muted)]">
           列
-          <input v-model.number="cols" type="number" min="1" max="20" class="collage-input" />
+          <input
+            v-model.number="cols"
+            type="number"
+            min="1"
+            max="20"
+            class="w-96px border border-[var(--border)] rounded-8px bg-[var(--input-background-soft)] px-10px py-6px text-14px text-[var(--text-primary)]"
+          />
         </label>
-        <label>
+        <label class="flex items-center gap-6px text-13px text-[var(--text-muted)]">
           总宽
-          <input v-model.number="totalWidth" type="number" min="256" max="8192" step="64" class="collage-input" />
+          <input
+            v-model.number="totalWidth"
+            type="number"
+            min="256"
+            max="8192"
+            step="64"
+            class="w-96px border border-[var(--border)] rounded-8px bg-[var(--input-background-soft)] px-10px py-6px text-14px text-[var(--text-primary)]"
+          />
         </label>
-        <label>
+        <label class="flex items-center gap-6px text-13px text-[var(--text-muted)]">
           格式
-          <select v-model="format" class="collage-input">
+          <select
+            v-model="format"
+            class="w-96px border border-[var(--border)] rounded-8px bg-[var(--input-background-soft)] px-10px py-6px text-14px text-[var(--text-primary)]"
+          >
             <option value="png">PNG</option>
             <option value="jpeg">JPG</option>
           </select>
         </label>
-        <label v-if="format === 'jpeg'">
+        <label
+          v-if="format === 'jpeg'"
+          class="flex items-center gap-6px text-13px text-[var(--text-muted)]"
+        >
           质量
           <input v-model.number="jpgQuality" type="range" min="0.5" max="1" step="0.01" />
           <span>{{ Math.round(jpgQuality * 100) }}%</span>
@@ -212,7 +251,7 @@ async function exportCollage(): Promise<void> {
       </div>
 
       <div
-        class="collage-grid"
+        class="mb-18px grid max-h-50vh gap-4px overflow-y-auto border border-[var(--border-soft)] rounded-8px bg-[var(--image-well-background)] p-4px"
         :style="{ gridTemplateColumns: `repeat(${cols}, 1fr)` }"
       >
         <img
@@ -222,9 +261,12 @@ async function exportCollage(): Promise<void> {
           :src="allUrls[idx]"
           crossOrigin="anonymous"
           draggable="true"
-          class="collage-thumb"
+          class="w-full cursor-grab border-2 border-transparent rounded-6px object-cover transition-[opacity,border-color] duration-150 hover:border-[var(--accent-border)] active:cursor-grabbing active:opacity-50"
           :style="{ aspectRatio: cellRatio }"
-          :class="{ 'collage-thumb-dragover': dragOverPos === pos }"
+          :class="{
+            '!border-[var(--accent)] shadow-[0_0_0_2px_rgba(125,211,252,0.5)]':
+              dragOverPos === pos,
+          }"
           @load="onImgLoad"
           @dragstart="onDragStart(pos, $event)"
           @dragover="onDragOver(pos, $event)"
@@ -235,117 +277,26 @@ async function exportCollage(): Promise<void> {
       </div>
 
       <!-- 隐藏 canvas，仅供导出 -->
-      <canvas ref="canvasRef" style="display: none"></canvas>
+      <canvas ref="canvasRef" class="hidden"></canvas>
 
-      <p v-if="errorMessage" class="collage-error">{{ errorMessage }}</p>
+      <p
+        v-if="errorMessage"
+        class="m-0 mb-12px text-14px text-[var(--danger-text)]"
+      >
+        {{ errorMessage }}
+      </p>
 
-      <div class="collage-actions">
+      <div class="flex justify-end gap-10px">
         <button class="ghost-button" type="button" @click="emit('close')">取消</button>
-        <button class="primary-button" type="button" :disabled="isExporting || n === 0" @click="exportCollage">
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="isExporting || n === 0"
+          @click="exportCollage"
+        >
           {{ isExporting ? '导出中…' : '导出' }}
         </button>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.collage-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--backdrop);
-}
-.collage-dialog {
-  width: 640px;
-  max-width: 92vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--panel-background-solid);
-  box-shadow: var(--shadow-dialog);
-}
-.collage-dialog h3 {
-  margin: 0 0 8px;
-}
-.collage-dialog p {
-  margin: 0 0 16px;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-.collage-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-.collage-fields label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.collage-input {
-  width: 96px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--input-background-soft);
-  color: var(--text-primary);
-  font-size: 14px;
-}
-.collage-grid {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 18px;
-  max-height: 50vh;
-  overflow-y: auto;
-  padding: 4px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--image-well-background);
-}
-.collage-thumb {
-  width: 100%;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 2px solid transparent;
-  cursor: grab;
-  transition: opacity 0.15s, border-color 0.15s;
-}
-.collage-thumb:hover {
-  border-color: var(--accent-border);
-}
-.collage-thumb:active {
-  cursor: grabbing;
-  opacity: 0.5;
-}
-.collage-thumb-dragover {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.5);
-}
-.collage-error {
-  color: var(--danger-text);
-  margin: 0 0 12px;
-}
-.collage-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-.collage-toolbar {
-  margin-bottom: 14px;
-}
-.collage-empty {
-  padding: 24px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  text-align: center;
-}
-</style>

@@ -30,6 +30,7 @@ const review: StoredGameReview = {
   duration: '42',
   rating: 5,
   recommendation: 'S',
+  coverBlurred: false,
 }
 
 describe('game review storage', () => {
@@ -64,6 +65,7 @@ describe('game review storage', () => {
             duration: null,
             rating: 20,
             recommendation: 'A',
+            coverBlurred: 'yes',
           },
           '20': null,
         },
@@ -78,6 +80,7 @@ describe('game review storage', () => {
         duration: '',
         rating: 0,
         recommendation: 'A',
+        coverBlurred: false,
       },
     })
   })
@@ -128,6 +131,7 @@ describe('game review storage', () => {
       duration: '8',
       rating: 4,
       recommendation: 'A+',
+      coverBlurred: true,
     }
 
     saveGameReviews(storage, { '20': newerReview })

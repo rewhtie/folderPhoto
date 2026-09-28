@@ -97,6 +97,7 @@ function addSelectedToReview(): void {
       id: image.fileUrl,
       src: image.fileUrl,
       label: image.appName || tierLabelFromUrl(image.fileUrl, image.relativePath),
+      appId: image.appId || undefined,
     })
   }
   addToReviewPool(entries)
@@ -587,332 +588,554 @@ async function selectDirectory(): Promise<void> {
 </script>
 
 <template>
-  <div class="app-shell">
-    <nav class="tab-bar">
-      <button :class="{ active: activeTab === 'browser' }" @click="activeTab = 'browser'">图片浏览器</button>
-      <button :class="{ active: activeTab === 'career' }" @click="activeTab = 'career'">职业游戏生涯拼图</button>
-      <button :class="{ active: activeTab === 'review' }" @click="activeTab = 'review'">游戏评测排名</button>
-      <button :class="{ active: activeTab === 'game-review' }" @click="activeTab = 'game-review'">游戏测评</button>
-      <button @click="openFreeCollage">自由拼图</button>
+  <div class="min-h-screen bg-[var(--app-background)] text-[var(--text-primary)]">
+    <nav
+      class="sticky top-0 z-20 flex gap-4px border-b border-[var(--border)] bg-[var(--nav-background)] px-40px py-8px [backdrop-filter:blur(14px)]"
+    >
       <button
-        class="theme-toggle"
+        class="cursor-pointer border-0 rounded-10px bg-transparent px-18px py-8px text-14px font-700 text-[var(--text-muted)]"
+        :class="{
+          '!bg-[var(--accent-background)] !text-[var(--accent)]': activeTab === 'browser',
+        }"
+        @click="activeTab = 'browser'"
+      >
+        图片浏览器
+      </button>
+      <button
+        class="cursor-pointer border-0 rounded-10px bg-transparent px-18px py-8px text-14px font-700 text-[var(--text-muted)]"
+        :class="{
+          '!bg-[var(--accent-background)] !text-[var(--accent)]': activeTab === 'career',
+        }"
+        @click="activeTab = 'career'"
+      >
+        职业游戏生涯拼图
+      </button>
+      <button
+        class="cursor-pointer border-0 rounded-10px bg-transparent px-18px py-8px text-14px font-700 text-[var(--text-muted)]"
+        :class="{
+          '!bg-[var(--accent-background)] !text-[var(--accent)]': activeTab === 'review',
+        }"
+        @click="activeTab = 'review'"
+      >
+        游戏评测排名
+      </button>
+      <button
+        class="cursor-pointer border-0 rounded-10px bg-transparent px-18px py-8px text-14px font-700 text-[var(--text-muted)]"
+        :class="{
+          '!bg-[var(--accent-background)] !text-[var(--accent)]':
+            activeTab === 'game-review',
+        }"
+        @click="activeTab = 'game-review'"
+      >
+        游戏测评
+      </button>
+      <button
+        class="cursor-pointer border-0 rounded-10px bg-transparent px-18px py-8px text-14px font-700 text-[var(--text-muted)]"
+        @click="openFreeCollage"
+      >
+        自由拼图
+      </button>
+      <button
+        class="ml-auto min-w-92px inline-flex cursor-pointer items-center justify-center gap-7px border border-[var(--accent-border)] rounded-10px bg-[var(--accent-background-soft)] px-18px py-8px text-14px font-700 text-[var(--text-soft)] outline-none hover:border-[var(--accent)] hover:text-[var(--accent)] focus-visible:border-[var(--accent)] focus-visible:text-[var(--accent)]"
         type="button"
         :title="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'"
         :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'"
         :aria-pressed="theme === 'light'"
         @click="toggleTheme"
       >
-        <span class="theme-toggle-icon" aria-hidden="true">{{ theme === 'dark' ? '☀' : '☾' }}</span>
+        <span class="text-17px leading-none" aria-hidden="true">
+          {{ theme === 'dark' ? '☀' : '☾' }}
+        </span>
         <span>{{ theme === 'dark' ? '白天' : '黑夜' }}</span>
       </button>
     </nav>
 
     <div v-show="activeTab === 'browser'">
-    <main class="page-shell">
-      <section class="hero-panel">
-      <h1>steam本地游戏封面获取</h1>
-      <p class="description">
-        输入 Steam librarycache 文件夹路径，查找 封面图片、背景、宽幅封面图片、徽标。
-      </p>
+      <main class="min-h-screen bg-[var(--page-background)] p-40px">
+        <section
+          class="mx-auto max-w-1180px border border-[var(--border)] rounded-24px bg-[var(--panel-background)] p-32px [box-shadow:var(--shadow-panel)]"
+        >
+          <h1 class="m-0 mb-12px text-36px">steam本地游戏封面获取</h1>
+          <p class="mt-0 max-w-720px text-[var(--text-secondary)] [line-height:1.7]">
+            输入 Steam librarycache 文件夹路径，查找 封面图片、背景、宽幅封面图片、徽标。
+          </p>
 
-      <form class="path-form" @submit.prevent="scanImages()">
-        <label for="directoryPath">librarycache 路径</label>
-        <div class="path-row">
-          <input
-            id="directoryPath"
-            v-model="directoryPath"
-            type="text"
-            placeholder="请选择或输入 Steam librarycache 路径"
-            autocomplete="off"
-          />
-          <button class="secondary-button" type="button" :disabled="isLoading || isSelectingDirectory" @click="selectDirectory">
-            {{ isSelectingDirectory ? '选择中...' : '选择文件夹' }}
-          </button>
-          <button type="submit" :disabled="isLoading || isSelectingDirectory">
-            {{ isLoading ? '扫描中...' : '扫描' }}
-          </button>
-          <button
-            class="secondary-button"
-            type="button"
-            :disabled="isLoading || images.length === 0"
-            title="从 Steam 客户端读取本机收藏夹，按 AppID 匹配本地图片并导入"
-            @click="importSteamCollections"
-          >
-            导入 Steam 收藏夹
-          </button>
-          <button
-            class="icon-button"
-            type="button"
-            title="设置"
-            @click="isSettingsOpen = true"
-          >
-            ⚙
-          </button>
-        </div>
-      </form>
-    </section>
-
-    <section class="content-panel" aria-live="polite">
-      <GameDetail
-        v-if="detailGame"
-        :app-id="detailGame.appId"
-        :app-name="detailGame.appName"
-        :images="detailImages"
-        :directory-path="directoryPath"
-        :is-selected="isSelected"
-        :toggle-selected="toggleSelected"
-        @back="closeDetail"
-      />
-
-      <div v-show="!detailGame">
-      <div v-if="errorMessage" class="state-card error-state">
-        {{ errorMessage }}
-      </div>
-
-      <div v-else-if="isLoading" class="state-card">
-        正在扫描 Steam 缓存图片，请稍候...
-      </div>
-
-      <div v-else-if="hasScanned && images.length === 0" class="state-card">
-        没有找到 library_hero、header_schinese 或 header 图片。
-      </div>
-
-      <template v-else-if="images.length > 0">
-        <div class="result-header">
-          <h2>Steam 缓存图片扫描结果</h2>
-          <span>{{ imageCountLabel }}</span>
-        </div>
-
-        <input
-          v-model="searchQuery"
-          class="search-input"
-          type="search"
-          placeholder="搜索游戏名、路径或 AppID，例如 雀魂麻将 或 1598780"
-          autocomplete="off"
-        />
-
-        <label class="dlc-toggle">
-          <input v-model="includeDlc" type="checkbox" @change="hasScanned && scanImages()" />
-          显示 DLC 图片
-        </label>
-
-        <div class="collection-bar">
-          <span class="collection-label">自定义收藏夹：</span>
-          <span
-            class="chip chip-group"
-            :class="{ 'active-chip': activeCollection === '全部' }"
-            @click="onCollectionChipClick('全部')"
-          >
-            全部
-          </span>
-          <span
-            v-for="name in collectionNames"
-            :key="name"
-            class="chip chip-group"
-            :class="{ 'active-chip': activeCollection === name }"
-          >
-            <button class="chip-name" type="button" @click="onCollectionChipClick(name)">
-              {{ name }} ({{ collections[name]?.length ?? 0 }})
-            </button>
-            <button
-              v-if="activeCollection === name"
-              class="chip-export"
-              type="button"
-              :disabled="isExporting"
-              title="保存此收藏夹图片（已有会自动略过）"
-              @click="exportActiveCollection"
+          <form class="mt-28px" @submit.prevent="scanImages()">
+            <label
+              class="mb-10px block font-700 text-[var(--text-soft)]"
+              for="directoryPath"
             >
-              {{ isExporting ? '⏳' : '⬇' }}
-            </button>
-            <button
-              v-if="activeCollection === name"
-              class="chip-delete"
-              type="button"
-              title="删除此收藏夹"
-              @click="deleteCollection(name)"
-            >
-              ✕
-            </button>
-          </span>
-        </div>
-
-        <div class="collection-bar" v-if="steamCollectionNames.length > 0">
-          <span class="collection-label">Steam 收藏夹：</span>
-          <span
-            v-for="name in steamCollectionNames"
-            :key="name"
-            class="chip chip-group"
-            :class="{ 'active-chip': activeCollection === name }"
-          >
-            <button class="chip-name" type="button" @click="onCollectionChipClick(name)">
-              {{ name }} ({{ steamCollections[name]?.length ?? 0 }})
-            </button>
-            <button
-              v-if="activeCollection === name"
-              class="chip-export"
-              type="button"
-              :disabled="isExporting"
-              title="保存此收藏夹图片（已有会自动略过）"
-              @click="exportSteamCollection(name)"
-            >
-              {{ isExporting ? '⏳' : '⬇' }}
-            </button>
-          </span>
-        </div>
-
-        <div class="collection-bar" role="tablist" aria-label="按文件名筛选">
-          <span class="collection-label">分类：</span>
-          <span
-            class="chip"
-            :class="{ 'active-chip': activeGroup === '全部' }"
-            role="tab"
-            :aria-selected="activeGroup === '全部'"
-            @click="onGroupChipClick('全部')"
-          >
-            全部 ({{ collectionScopedImages.length }})
-          </span>
-          <span
-            v-for="group in imageGroups"
-            :key="group.name"
-            class="chip"
-            :class="{ 'active-chip': activeGroup === group.name }"
-            role="tab"
-            :aria-selected="activeGroup === group.name"
-            @click="onGroupChipClick(group.name)"
-          >
-            {{ group.name }} ({{ group.count }})
-          </span>
-        </div>
-
-        <div v-if="filteredImages.length === 0" class="state-card muted-state">
-          没有匹配的图片。
-        </div>
-        <div v-else class="image-grid">
-          <article
-            v-for="image in filteredImages"
-            :key="image.absolutePath"
-            class="image-card"
-            :class="{ 'selected-card': isSelected(image.absolutePath) }"
-          >
-            <label class="select-checkbox" @click.stop>
-              <input
-                type="checkbox"
-                :checked="isSelected(image.absolutePath)"
-                @change="toggleSelected(image.absolutePath)"
-              />
+              librarycache 路径
             </label>
-            <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
-              <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
-            </div>
-            <div class="image-meta">
-              <strong :title="image.appName || image.relativePath">
-                {{ image.appName || image.relativePath }}
-              </strong>
-              <span class="meta-sub">
-                <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
-                <button
-                  v-if="image.appId"
-                  class="detail-link"
-                  type="button"
-                  title="查看详情与成就"
-                  @click.stop="openDetail(image.appId, image.appName || image.appId)"
-                >
-                  👁️
-                </button>
-              </span>
+            <div class="flex items-center gap-12px">
+              <input
+                id="directoryPath"
+                v-model="directoryPath"
+                class="min-w-0 flex-1 border border-[var(--border-strong)] rounded-14px bg-[var(--input-background)] px-16px py-14px text-15px text-[var(--text-bright)] outline-none focus:border-[var(--accent-strong)] focus:shadow-[0_0_0_4px_var(--focus-ring)]"
+                type="text"
+                placeholder="请选择或输入 Steam librarycache 路径"
+                autocomplete="off"
+              />
               <button
-                v-if="activeCollection !== '全部'"
-                class="ghost-button remove-button"
+                class="cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-22px py-11px text-15px font-800 text-[var(--text-soft)] disabled:cursor-wait disabled:opacity-68"
                 type="button"
-                @click="removeFromCollection(image.absolutePath, activeCollection)"
+                :disabled="isLoading || isSelectingDirectory"
+                @click="selectDirectory"
               >
-                从「{{ activeCollection }}」移除
+                {{ isSelectingDirectory ? '选择中...' : '选择文件夹' }}
+              </button>
+              <button
+                class="cursor-pointer border-0 rounded-14px bg-[var(--accent)] px-22px py-11px text-15px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
+                type="submit"
+                :disabled="isLoading || isSelectingDirectory"
+              >
+                {{ isLoading ? '扫描中...' : '扫描' }}
+              </button>
+              <button
+                class="cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-22px py-11px text-15px font-800 text-[var(--text-soft)] disabled:cursor-wait disabled:opacity-68"
+                type="button"
+                :disabled="isLoading || images.length === 0"
+                title="从 Steam 客户端读取本机收藏夹，按 AppID 匹配本地图片并导入"
+                @click="importSteamCollections"
+              >
+                导入 Steam 收藏夹
+              </button>
+              <button
+                class="h-auto w-44px inline-flex flex-none cursor-pointer items-center justify-center border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-15px py-9px text-18px text-[var(--text-soft)] hover:text-[var(--accent)]"
+                type="button"
+                title="设置"
+                @click="isSettingsOpen = true"
+              >
+                ⚙
               </button>
             </div>
-          </article>
-        </div>
-      </template>
+          </form>
+        </section>
 
-      <div v-else class=”state-card muted-state”>
-        选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击”扫描”。
-      </div>
-      </div>
+        <section class="mx-auto mt-24px max-w-1180px" aria-live="polite">
+          <GameDetail
+            v-if="detailGame"
+            :app-id="detailGame.appId"
+            :app-name="detailGame.appName"
+            :images="detailImages"
+            :directory-path="directoryPath"
+            :is-selected="isSelected"
+            :toggle-selected="toggleSelected"
+            @back="closeDetail"
+          />
 
-      <div v-if="selectedPaths.size > 0" class="selection-bar floating-selection">
-        <span>已选 {{ selectedPaths.size }} 张</span>
-        <button class="primary-button" type="button" @click="downloadSelected">下载选中</button>
-        <button class="secondary-button" type="button" @click="openCollageDialog">拼图</button>
-        <button class="secondary-button" type="button" @click="openGameReview">测评</button>
-        <button class="secondary-button" type="button" @click="addSelectedToReview">加入评测排名</button>
-        <button class="secondary-button" type="button" @click="addSelectedToCollection">加入收藏夹</button>
-        <button class="ghost-button" type="button" @click="clearSelection">取消选择</button>
-      </div>
-    </section>
-
-    <div v-if="isCollectionDialogOpen" class="dialog-backdrop" @click.self="cancelCollectionDialog">
-      <div class="dialog">
-        <h3>加入收藏夹</h3>
-        <p>为选中的 {{ selectedPaths.size }} 张图片指定收藏夹</p>
-
-        <input
-          v-model="collectionNameInput"
-          class="dialog-input"
-          type="text"
-          placeholder="输入新收藏夹名称，例如：黄油"
-          autocomplete="off"
-          @keyup.enter="confirmCollectionDialog"
-        />
-
-        <div v-if="collectionNames.length > 0" class="picker">
-          <p class="picker-label">选择已有收藏夹</p>
-          <div class="picker-list">
-            <button
-              v-for="name in collectionNames"
-              :key="name"
-              class="picker-item"
-              :class="{ 'picker-item-active': collectionNameInput.trim() === name }"
-              type="button"
-              @click="collectionNameInput = name"
+          <div v-show="!detailGame">
+            <div
+              v-if="errorMessage"
+              class="border border-[var(--danger-border)] rounded-20px border-dashed bg-[var(--danger-background)] p-28px text-center text-[var(--danger-text)]"
             >
-              <span class="picker-name">{{ name }}</span>
-              <span class="picker-count">{{ collections[name].length }}</span>
+              {{ errorMessage }}
+            </div>
+
+            <div
+              v-else-if="isLoading"
+              class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-soft)]"
+            >
+              正在扫描 Steam 缓存图片，请稍候...
+            </div>
+
+            <div
+              v-else-if="hasScanned && images.length === 0"
+              class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-soft)]"
+            >
+              没有找到 library_hero、header_schinese 或 header 图片。
+            </div>
+
+            <template v-else-if="images.length > 0">
+              <div class="mb-18px flex items-center justify-between">
+                <h2 class="m-0">Steam 缓存图片扫描结果</h2>
+                <span class="font-800 text-[var(--accent-soft)]">{{ imageCountLabel }}</span>
+              </div>
+
+              <input
+                v-model="searchQuery"
+                class="mb-16px w-full min-w-0 flex-1 border border-[var(--border-strong)] rounded-14px bg-[var(--input-background)] px-16px py-14px text-15px text-[var(--text-bright)] outline-none focus:border-[var(--accent-strong)] focus:shadow-[0_0_0_4px_var(--focus-ring)]"
+                type="search"
+                placeholder="搜索游戏名、路径或 AppID，例如 雀魂麻将 或 1598780"
+                autocomplete="off"
+              />
+
+              <label
+                class="mb-14px inline-flex cursor-pointer items-center gap-8px text-14px text-[var(--text-soft)]"
+              >
+                <input
+                  v-model="includeDlc"
+                  class="h-16px w-16px cursor-pointer"
+                  type="checkbox"
+                  @change="hasScanned && scanImages()"
+                />
+                显示 DLC 图片
+              </label>
+
+              <div class="mb-14px flex flex-wrap items-center gap-8px">
+                <span class="font-700 text-[var(--text-soft)]">自定义收藏夹：</span>
+                <span
+                  class="inline-flex cursor-pointer items-center gap-6px border border-[var(--accent-border)] rounded-full bg-[var(--accent-background-soft)] px-12px py-4px text-14px font-700 text-[var(--text-soft)]"
+                  :class="{
+                    '!bg-[var(--accent)] !text-[var(--accent-text)]':
+                      activeCollection === '全部',
+                  }"
+                  @click="onCollectionChipClick('全部')"
+                >
+                  全部
+                </span>
+                <span
+                  v-for="name in collectionNames"
+                  :key="name"
+                  class="inline-flex cursor-pointer items-center gap-6px border border-[var(--accent-border)] rounded-full bg-[var(--accent-background-soft)] px-12px py-4px text-14px font-700 text-[var(--text-soft)]"
+                  :class="{
+                    '!bg-[var(--accent)] !text-[var(--accent-text)]':
+                      activeCollection === name,
+                  }"
+                >
+                  <button
+                    class="cursor-pointer border-0 bg-transparent p-0 text-14px font-700 text-inherit"
+                    type="button"
+                    @click="onCollectionChipClick(name)"
+                  >
+                    {{ name }} ({{ collections[name]?.length ?? 0 }})
+                  </button>
+                  <button
+                    v-if="activeCollection === name"
+                    class="h-16px w-16px inline-flex cursor-pointer items-center justify-center border-0 rounded-full bg-[rgba(8,47,73,0.25)] p-0 text-12px text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
+                    type="button"
+                    :disabled="isExporting"
+                    title="保存此收藏夹图片（已有会自动略过）"
+                    @click="exportActiveCollection"
+                  >
+                    {{ isExporting ? '⏳' : '⬇' }}
+                  </button>
+                  <button
+                    v-if="activeCollection === name"
+                    class="h-16px w-16px inline-flex cursor-pointer items-center justify-center border-0 rounded-full bg-[var(--danger-control-background)] p-0 text-12px text-[var(--danger-control-text)]"
+                    type="button"
+                    title="删除此收藏夹"
+                    @click="deleteCollection(name)"
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+
+              <div
+                v-if="steamCollectionNames.length > 0"
+                class="mb-14px flex flex-wrap items-center gap-8px"
+              >
+                <span class="font-700 text-[var(--text-soft)]">Steam 收藏夹：</span>
+                <span
+                  v-for="name in steamCollectionNames"
+                  :key="name"
+                  class="inline-flex cursor-pointer items-center gap-6px border border-[var(--accent-border)] rounded-full bg-[var(--accent-background-soft)] px-12px py-4px text-14px font-700 text-[var(--text-soft)]"
+                  :class="{
+                    '!bg-[var(--accent)] !text-[var(--accent-text)]':
+                      activeCollection === name,
+                  }"
+                >
+                  <button
+                    class="cursor-pointer border-0 bg-transparent p-0 text-14px font-700 text-inherit"
+                    type="button"
+                    @click="onCollectionChipClick(name)"
+                  >
+                    {{ name }} ({{ steamCollections[name]?.length ?? 0 }})
+                  </button>
+                  <button
+                    v-if="activeCollection === name"
+                    class="h-16px w-16px inline-flex cursor-pointer items-center justify-center border-0 rounded-full bg-[rgba(8,47,73,0.25)] p-0 text-12px text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
+                    type="button"
+                    :disabled="isExporting"
+                    title="保存此收藏夹图片（已有会自动略过）"
+                    @click="exportSteamCollection(name)"
+                  >
+                    {{ isExporting ? '⏳' : '⬇' }}
+                  </button>
+                </span>
+              </div>
+
+              <div
+                class="mb-14px flex flex-wrap items-center gap-8px"
+                role="tablist"
+                aria-label="按文件名筛选"
+              >
+                <span class="font-700 text-[var(--text-soft)]">分类：</span>
+                <span
+                  class="inline-flex cursor-pointer items-center border border-[var(--accent-border)] rounded-full bg-[var(--accent-background-soft)] px-12px py-8px text-14px font-700 text-[var(--text-soft)]"
+                  :class="{
+                    '!bg-[var(--accent)] !text-[var(--accent-text)]': activeGroup === '全部',
+                  }"
+                  role="tab"
+                  :aria-selected="activeGroup === '全部'"
+                  @click="onGroupChipClick('全部')"
+                >
+                  全部 ({{ collectionScopedImages.length }})
+                </span>
+                <span
+                  v-for="group in imageGroups"
+                  :key="group.name"
+                  class="inline-flex cursor-pointer items-center border border-[var(--accent-border)] rounded-full bg-[var(--accent-background-soft)] px-12px py-8px text-14px font-700 text-[var(--text-soft)]"
+                  :class="{
+                    '!bg-[var(--accent)] !text-[var(--accent-text)]':
+                      activeGroup === group.name,
+                  }"
+                  role="tab"
+                  :aria-selected="activeGroup === group.name"
+                  @click="onGroupChipClick(group.name)"
+                >
+                  {{ group.name }} ({{ group.count }})
+                </span>
+              </div>
+
+              <div
+                v-if="filteredImages.length === 0"
+                class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-muted)]"
+              >
+                没有匹配的图片。
+              </div>
+              <div
+                v-else
+                class="grid gap-18px [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))]"
+              >
+                <article
+                  v-for="image in filteredImages"
+                  :key="image.absolutePath"
+                  class="relative overflow-hidden border border-[var(--border-soft)] rounded-18px bg-[var(--panel-background)]"
+                  :class="{
+                    '[outline:2px_solid_var(--accent)]': isSelected(image.absolutePath),
+                  }"
+                >
+                  <label
+                    class="absolute right-8px top-8px z-3 h-32px w-32px flex cursor-pointer items-center justify-center rounded-10px bg-[rgba(2,6,23,0.7)]"
+                    @click.stop
+                  >
+                    <input
+                      class="h-22px w-22px cursor-pointer"
+                      type="checkbox"
+                      :checked="isSelected(image.absolutePath)"
+                      @change="toggleSelected(image.absolutePath)"
+                    />
+                  </label>
+                  <div
+                    class="h-150px flex cursor-pointer items-center justify-center bg-[var(--image-well-background)]"
+                    @click="toggleSelected(image.absolutePath)"
+                  >
+                    <img
+                      class="max-h-full max-w-full object-contain"
+                      :src="image.fileUrl"
+                      :alt="image.name"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div class="grid gap-6px p-12px">
+                    <strong
+                      class="overflow-hidden text-ellipsis whitespace-nowrap text-14px text-[var(--text-bright)]"
+                      :title="image.appName || image.relativePath"
+                    >
+                      {{ image.appName || image.relativePath }}
+                    </strong>
+                    <span
+                      class="flex items-center justify-between text-12px text-[var(--text-muted)]"
+                    >
+                      <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
+                      <button
+                        v-if="image.appId"
+                        class="cursor-pointer border-0 bg-transparent p-0 text-15px text-[var(--text-muted)] opacity-60 transition-[opacity,color] duration-150 hover:text-[var(--accent)] hover:opacity-100"
+                        type="button"
+                        title="查看详情与成就"
+                        @click.stop="openDetail(image.appId, image.appName || image.appId)"
+                      >
+                        👁️
+                      </button>
+                    </span>
+                    <button
+                      v-if="activeCollection !== '全部'"
+                      class="mt-4px cursor-pointer border border-[var(--border-strong)] rounded-12px bg-transparent px-12px py-8px text-12px text-[var(--text-soft)]"
+                      type="button"
+                      @click="removeFromCollection(image.absolutePath, activeCollection)"
+                    >
+                      从「{{ activeCollection }}」移除
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </template>
+
+            <div
+              v-else
+              class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-muted)]"
+            >
+              选择 Steam librarycache 文件夹后自动扫描图片，或输入路径后点击“扫描”。
+            </div>
+          </div>
+
+          <div
+            v-if="selectedPaths.size > 0"
+            class="fixed right-20px top-60px z-21 mb-0 flex items-center gap-10px border border-[var(--accent-border)] rounded-14px bg-[var(--floating-background)] px-14px py-10px text-[var(--text-primary)] [box-shadow:var(--shadow-floating)]"
+          >
+            <span>已选 {{ selectedPaths.size }} 张</span>
+            <button
+              class="h-38px cursor-pointer border-0 rounded-14px bg-[var(--accent)] px-16px text-14px font-800 text-[var(--accent-text)]"
+              type="button"
+              @click="downloadSelected"
+            >
+              下载选中
             </button>
+            <button
+              class="h-38px cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-16px text-14px font-800 text-[var(--text-soft)]"
+              type="button"
+              @click="openCollageDialog"
+            >
+              拼图
+            </button>
+            <button
+              class="h-38px cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-16px text-14px font-800 text-[var(--text-soft)]"
+              type="button"
+              @click="openGameReview"
+            >
+              测评
+            </button>
+            <button
+              class="h-38px cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-16px text-14px font-800 text-[var(--text-soft)]"
+              type="button"
+              @click="addSelectedToReview"
+            >
+              加入评测排名
+            </button>
+            <button
+              class="h-38px cursor-pointer border border-[var(--accent-border)] rounded-14px bg-[var(--accent-background)] px-16px text-14px font-800 text-[var(--text-soft)]"
+              type="button"
+              @click="addSelectedToCollection"
+            >
+              加入收藏夹
+            </button>
+            <button
+              class="h-38px cursor-pointer border border-[var(--border-strong)] rounded-12px bg-transparent px-16px text-14px text-[var(--text-soft)]"
+              type="button"
+              @click="clearSelection"
+            >
+              取消选择
+            </button>
+          </div>
+        </section>
+
+        <div
+          v-if="isCollectionDialogOpen"
+          class="fixed inset-0 z-10 flex items-center justify-center bg-[var(--backdrop)]"
+          @click.self="cancelCollectionDialog"
+        >
+          <div
+            class="w-380px max-w-90vw border border-[var(--border)] rounded-18px bg-[var(--panel-background-solid)] p-24px [box-shadow:var(--shadow-dialog)]"
+          >
+            <h3 class="m-0 mb-8px">加入收藏夹</h3>
+            <p class="m-0 mb-16px text-14px text-[var(--text-muted)]">
+              为选中的 {{ selectedPaths.size }} 张图片指定收藏夹
+            </p>
+
+            <input
+              v-model="collectionNameInput"
+              class="mb-18px w-full min-w-0 border border-[var(--border-strong)] rounded-14px bg-[var(--input-background)] px-16px py-14px text-15px text-[var(--text-bright)] outline-none focus:border-[var(--accent-strong)] focus:shadow-[0_0_0_4px_var(--focus-ring)]"
+              type="text"
+              placeholder="输入新收藏夹名称，例如：黄油"
+              autocomplete="off"
+              @keyup.enter="confirmCollectionDialog"
+            />
+
+            <div v-if="collectionNames.length > 0" class="mb-20px">
+              <p class="m-0 mb-10px text-13px text-[var(--text-muted)]">
+                选择已有收藏夹
+              </p>
+              <div class="max-h-220px flex flex-col gap-8px overflow-y-auto pr-4px">
+                <button
+                  v-for="name in collectionNames"
+                  :key="name"
+                  class="w-full flex cursor-pointer items-center justify-between border border-[var(--border)] rounded-12px bg-[var(--input-background-soft)] px-14px py-10px text-14px font-600 text-[var(--text-primary)] transition-[border-color,background] duration-150 hover:border-[var(--accent)] hover:bg-[var(--table-header-background)]"
+                  :class="{
+                    '!border-[var(--accent)] !bg-[var(--accent-background)]':
+                      collectionNameInput.trim() === name,
+                  }"
+                  type="button"
+                  @click="collectionNameInput = name"
+                >
+                  <span class="overflow-hidden text-ellipsis whitespace-nowrap">{{ name }}</span>
+                  <span
+                    class="ml-10px flex-none rounded-full bg-[rgba(59,130,246,0.28)] px-10px py-2px text-12px text-[var(--text-soft)]"
+                  >
+                    {{ collections[name].length }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-10px">
+              <button
+                class="cursor-pointer border border-[var(--border-strong)] rounded-12px bg-transparent px-12px py-8px text-[var(--text-soft)]"
+                type="button"
+                @click="cancelCollectionDialog"
+              >
+                取消
+              </button>
+              <button
+                class="cursor-pointer border-0 rounded-14px bg-[var(--accent)] px-22px py-11px text-15px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
+                type="button"
+                :disabled="!collectionNameInput.trim()"
+                @click="confirmCollectionDialog"
+              >
+                加入
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="dialog-actions">
-          <button class="ghost-button" type="button" @click="cancelCollectionDialog">取消</button>
-          <button type="button" :disabled="!collectionNameInput.trim()" @click="confirmCollectionDialog">
-            加入
+        <SettingsDialog
+          v-if="isSettingsOpen"
+          @close="isSettingsOpen = false"
+        />
+
+        <div class="fixed bottom-28px right-28px z-12 flex flex-col gap-10px">
+          <button
+            v-if="showBackToTop"
+            class="h-48px w-48px cursor-pointer border-0 rounded-full bg-[var(--accent)] p-0 text-20px font-800 text-[var(--accent-text)] [box-shadow:var(--shadow-floating)]"
+            type="button"
+            title="向上滚动一屏"
+            @click="scrollByScreen(-1)"
+          >
+            ⇑
+          </button>
+          <button
+            v-if="showBackToTop"
+            class="h-48px w-48px cursor-pointer border-0 rounded-full bg-[var(--accent)] p-0 text-20px font-800 text-[var(--accent-text)] [box-shadow:var(--shadow-floating)]"
+            type="button"
+            title="向下滚动一屏"
+            @click="scrollByScreen(1)"
+          >
+            ⇓
+          </button>
+          <button
+            v-if="showBackToTop"
+            class="h-48px w-48px cursor-pointer border-0 rounded-full bg-[var(--accent)] p-0 text-20px font-800 text-[var(--accent-text)] [box-shadow:var(--shadow-floating)]"
+            type="button"
+            title="回到顶部"
+            @click="scrollToTop"
+          >
+            ⬆
           </button>
         </div>
-      </div>
-    </div>
 
-    <SettingsDialog
-      v-if="isSettingsOpen"
-      @close="isSettingsOpen = false"
-    />
-
-    <div class="floating-controls">
-      <button v-if="showBackToTop" class="round-button" type="button" title="向上滚动一屏" @click="scrollByScreen(-1)">
-        ⇑
-      </button>
-      <button v-if="showBackToTop" class="round-button" type="button" title="向下滚动一屏" @click="scrollByScreen(1)">
-        ⇓
-      </button>
-      <button v-if="showBackToTop" class="round-button" type="button" title="回到顶部" @click="scrollToTop">
-        ⬆
-      </button>
-    </div>
-
-    <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
-    </main>
+        <div
+          v-if="toastMessage"
+          class="fixed bottom-28px left-1/2 z-20 -translate-x-1/2 border border-[var(--accent-border)] rounded-12px bg-[var(--floating-background)] px-22px py-12px text-14px text-[var(--text-primary)] [box-shadow:var(--shadow-floating)]"
+        >
+          {{ toastMessage }}
+        </div>
+      </main>
     </div>
 
     <CareerCollage v-if="activeTab === 'career'" />
 
-    <ReviewRank v-if="activeTab === 'review'" />
+    <ReviewRank v-if="activeTab === 'review'" :images="images" />
 
     <GameReview
       v-show="activeTab === 'game-review'"
@@ -929,57 +1152,6 @@ async function selectDirectory(): Promise<void> {
 </template>
 
 <style scoped>
-.app-shell {
-  min-height: 100vh;
-  color: var(--text-primary);
-  background: var(--app-background);
-}
-.tab-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  gap: 4px;
-  padding: 8px 40px;
-  border-bottom: 1px solid var(--border);
-  background: var(--nav-background);
-  backdrop-filter: blur(14px);
-}
-.tab-bar button {
-  padding: 8px 18px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.tab-bar button.active {
-  color: var(--accent);
-  background: var(--accent-background);
-}
-.tab-bar .theme-toggle {
-  display: inline-flex;
-  min-width: 92px;
-  margin-left: auto;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid var(--accent-border);
-  color: var(--text-soft);
-  background: var(--accent-background-soft);
-}
-.tab-bar .theme-toggle:hover,
-.tab-bar .theme-toggle:focus-visible {
-  color: var(--accent);
-  border-color: var(--accent);
-  outline: none;
-}
-.theme-toggle-icon {
-  font-size: 17px;
-  line-height: 1;
-}
 :global(*) {
   box-sizing: border-box;
 }
@@ -1019,534 +1191,5 @@ async function selectDirectory(): Promise<void> {
 
 :global(::-webkit-scrollbar-corner) {
   background: transparent;
-}
-
-.page-shell {
-  min-height: 100vh;
-  padding: 40px;
-  background:
-    var(--page-background);
-}
-
-.hero-panel,
-.content-panel {
-  max-width: 1180px;
-  margin: 0 auto;
-}
-
-.hero-panel {
-  padding: 32px;
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: var(--panel-background);
-  box-shadow: var(--shadow-panel);
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--accent-soft);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 12px;
-  font-size: 36px;
-}
-
-.description {
-  max-width: 720px;
-  color: var(--text-secondary);
-  line-height: 1.7;
-}
-
-.path-form {
-  margin-top: 28px;
-}
-
-.path-form label {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--text-soft);
-  font-weight: 700;
-}
-
-.path-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-input {
-  flex: 1;
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  color: var(--text-bright);
-  background: var(--input-background);
-  font-size: 15px;
-  outline: none;
-}
-
-input:focus {
-  border-color: var(--accent-strong);
-  box-shadow: 0 0 0 4px var(--focus-ring);
-}
-
-button {
-  padding: 11px 22px;
-  border: 0;
-  border-radius: 14px;
-  color: var(--accent-text);
-  background: var(--accent);
-  font-size: 15px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.secondary-button {
-  color: var(--text-soft);
-  background: var(--accent-background);
-  border: 1px solid var(--accent-border);
-}
-
-button:disabled {
-  cursor: wait;
-  opacity: 0.68;
-}
-
-.content-panel {
-  margin-top: 24px;
-}
-
-.state-card {
-  padding: 28px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 20px;
-  color: var(--text-soft);
-  background: var(--panel-background-soft);
-  text-align: center;
-}
-
-.error-state {
-  border-color: var(--danger-border);
-  color: var(--danger-text);
-  background: var(--danger-background);
-}
-
-.muted-state {
-  color: var(--text-muted);
-}
-
-.result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-}
-
-.result-header h2 {
-  margin: 0;
-}
-
-.result-header span {
-  color: var(--accent-soft);
-  font-weight: 800;
-}
-
-.search-input {
-  width: 100%;
-  margin-bottom: 16px;
-}
-
-.collection-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.collection-label {
-  color: var(--text-soft);
-  font-weight: 700;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  border: 1px solid var(--accent-border);
-  border-radius: 999px;
-  color: var(--text-soft);
-  background: var(--accent-background-soft);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.chip-group {
-  gap: 6px;
-  padding: 4px 12px;
-}
-
-.chip-name {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.chip-export {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 12px;
-  background: rgba(8, 47, 73, 0.25);
-  color: var(--accent-text);
-}
-
-.chip-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 12px;
-  background: var(--danger-control-background);
-  color: var(--danger-control-text);
-}
-
-.active-chip {
-  color: var(--accent-text);
-  background: var(--accent);
-}
-
-.active-chip .chip-name {
-  color: var(--accent-text);
-}
-
-.selection-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border: 1px solid var(--accent-border);
-  border-radius: 14px;
-  background: var(--accent-background);
-  color: var(--text-primary);
-}
-
-.selection-bar button {
-  height: 38px;
-  padding: 0 16px;
-  font-size: 14px;
-}
-
-.toast {
-  position: fixed;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  padding: 12px 22px;
-  border-radius: 12px;
-  background: var(--floating-background);
-  border: 1px solid var(--accent-border);
-  color: var(--text-primary);
-  font-size: 14px;
-  box-shadow: var(--shadow-floating);
-}
-
-.floating-selection {
-  position: fixed;
-  top: 60px;
-  right: 20px;
-  z-index: 21;
-  margin-bottom: 0;
-  background: var(--floating-background);
-  box-shadow: var(--shadow-floating);
-}
-
-.floating-controls {
-  position: fixed;
-  bottom: 28px;
-  right: 28px;
-  z-index: 12;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.round-button {
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 20px;
-  box-shadow: var(--shadow-floating);
-}
-
-.ghost-button {
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  color: var(--text-soft);
-  background: transparent;
-}
-
-.remove-button {
-  margin-top: 4px;
-  font-size: 12px;
-}
-
-.selected-card {
-  outline: 2px solid var(--accent);
-}
-
-.select-checkbox {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: rgba(2, 6, 23, 0.7);
-  cursor: pointer;
-}
-
-.select-checkbox input {
-  width: 22px;
-  height: 22px;
-  cursor: pointer;
-}
-
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--backdrop);
-}
-
-.dialog {
-  width: 380px;
-  max-width: 90vw;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--panel-background-solid);
-  box-shadow: var(--shadow-dialog);
-}
-
-.dialog h3 {
-  margin: 0 0 8px;
-}
-
-.dialog p {
-  margin: 0 0 16px;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.dialog-input {
-  width: 100%;
-  margin-bottom: 18px;
-}
-
-.picker {
-  margin-bottom: 20px;
-}
-
-.picker-label {
-  margin: 0 0 10px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.picker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.picker-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--input-background-soft);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.picker-item:hover {
-  border-color: var(--accent);
-  background: var(--table-header-background);
-}
-
-.picker-item-active {
-  border-color: var(--accent);
-  background: var(--accent-background);
-}
-
-.picker-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.picker-count {
-  flex: 0 0 auto;
-  margin-left: 10px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.28);
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 18px;
-}
-
-.image-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  background: var(--panel-background);
-}
-
-.icon-button {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  padding: 9px 15px;
-  border-radius: 14px;
-  background: var(--accent-background);
-  border: 1px solid var(--accent-border);
-  color: var(--text-soft);
-  font-size: 18px;
-  cursor: pointer;
-}
-.icon-button:hover {
-  color: var(--accent);
-}
-
-.preview-frame {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 150px;
-  background: var(--image-well-background);
-}
-
-.preview-frame img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
-.image-meta {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-}
-
-.image-meta strong {
-  overflow: hidden;
-  color: var(--text-bright);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.image-meta span {
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.meta-sub {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.detail-link {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 15px;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.15s, color 0.15s;
-}
-.detail-link:hover {
-  opacity: 1;
-  color: var(--accent);
-}
-
-.dlc-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: var(--text-soft);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.dlc-toggle input {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
 }
 </style>

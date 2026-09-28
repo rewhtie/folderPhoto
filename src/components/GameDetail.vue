@@ -85,42 +85,75 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
 </script>
 
 <template>
-  <div class="game-detail">
-    <div class="detail-header">
-      <button class="back-button" type="button" @click="emit('back')">
-        <span class="back-arrow">←</span> 返回列表
+  <div class="flex flex-col gap-24px">
+    <div class="flex flex-wrap items-start gap-20px">
+      <button
+        class="inline-flex flex-none cursor-pointer items-center gap-6px border border-[var(--border-strong)] rounded-12px bg-transparent px-18px py-8px text-14px text-[var(--text-soft)] [transition:border-color_0.15s,color_0.15s] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+        type="button"
+        @click="emit('back')"
+      >
+        <span class="text-18px">←</span> 返回列表
       </button>
-      <div class="detail-title">
-        <h2>{{ appName }}</h2>
-        <span class="detail-appid">{{ appId }} · {{ images.length }} 张图片</span>
+      <div class="flex flex-col gap-4px">
+        <h2 class="m-0">{{ appName }}</h2>
+        <span class="text-13px text-[var(--text-muted)]">
+          {{ appId }} · {{ images.length }} 张图片
+        </span>
       </div>
     </div>
 
-    <section class="detail-section">
-      <h3>游戏图片</h3>
-      <div v-if="images.length === 0" class="state-card muted-state">该游戏没有图片。</div>
-      <div v-else class="image-grid">
+    <section>
+      <h3 class="m-0 mb-12px">游戏图片</h3>
+      <div
+        v-if="images.length === 0"
+        class="state-card muted-state p-24px text-[var(--text-muted)]"
+      >
+        该游戏没有图片。
+      </div>
+      <div
+        v-else
+        class="grid gap-18px [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))]"
+      >
         <article
           v-for="image in images"
           :key="image.absolutePath"
-          class="image-card"
-          :class="{ 'selected-card': isSelected(image.absolutePath) }"
+          class="relative overflow-hidden border border-[var(--border-soft)] rounded-18px bg-[var(--panel-background)]"
+          :class="{
+            '[outline:2px_solid_var(--accent)]': isSelected(image.absolutePath),
+          }"
         >
-          <label class="select-checkbox" @click.stop>
+          <label
+            class="absolute right-8px top-8px z-3 h-32px w-32px flex cursor-pointer items-center justify-center rounded-10px bg-[rgba(2,6,23,0.7)]"
+            @click.stop
+          >
             <input
+              class="h-22px w-22px cursor-pointer"
               type="checkbox"
               :checked="isSelected(image.absolutePath)"
               @change="toggleSelected(image.absolutePath)"
             />
           </label>
-          <div class="preview-frame" @click="toggleSelected(image.absolutePath)">
-            <img :src="image.fileUrl" :alt="image.name" loading="lazy" />
+          <div
+            class="h-150px flex cursor-pointer items-center justify-center bg-[var(--image-well-background)]"
+            @click="toggleSelected(image.absolutePath)"
+          >
+            <img
+              class="max-h-full max-w-full object-contain"
+              :src="image.fileUrl"
+              :alt="image.name"
+              loading="lazy"
+            />
           </div>
-          <div class="image-meta">
-            <strong :title="image.appName || image.name">
+          <div class="grid gap-6px p-12px">
+            <strong
+              class="overflow-hidden text-ellipsis whitespace-nowrap text-14px text-[var(--text-bright)]"
+              :title="image.appName || image.name"
+            >
               {{ image.appName || image.name }}
             </strong>
-            <span class="meta-sub">
+            <span
+              class="flex items-center justify-between text-12px text-[var(--text-muted)]"
+            >
               <span>{{ image.appId }} · {{ formatFileSize(image.sizeBytes) }}</span>
             </span>
           </div>
@@ -128,246 +161,86 @@ const unlockedCount = computed(() => achievements.value.filter((a) => a.achieved
       </div>
     </section>
 
-    <section class="detail-section">
-      <h3>成就</h3>
-      <div class="achievement-bar">
-        <button class="secondary-button" type="button" :disabled="isLoadingAchievements" @click="loadAchievements">
+    <section>
+      <h3 class="m-0 mb-12px">成就</h3>
+      <div class="mb-16px flex items-center gap-16px">
+        <button
+          class="secondary-button"
+          type="button"
+          :disabled="isLoadingAchievements"
+          @click="loadAchievements"
+        >
           {{ isLoadingAchievements ? '加载中…' : '加载成就' }}
         </button>
-        <span v-if="achievements.length > 0" class="achievement-summary">
+        <span
+          v-if="achievements.length > 0"
+          class="text-14px text-[var(--text-muted)]"
+        >
           {{ unlockedCount }} / {{ achievements.length }} 解锁
         </span>
         <button
           v-if="achievements.length > 0 && achievementSource === 'api'"
-          class="secondary-button open-dir-btn"
+          class="secondary-button ml-auto px-14px py-6px text-13px"
           type="button"
           @click="openCacheDir"
         >
           📂 打开缓存目录
         </button>
-        <span v-if="isCachingIcons" class="cache-msg">缓存图标中…</span>
-        <span v-else-if="cacheMessage" class="cache-msg">{{ cacheMessage }}</span>
+        <span v-if="isCachingIcons" class="text-12px text-[var(--text-muted)]">
+          缓存图标中…
+        </span>
+        <span v-else-if="cacheMessage" class="text-12px text-[var(--text-muted)]">
+          {{ cacheMessage }}
+        </span>
       </div>
 
-      <p v-if="achievementError" class="achievement-error">{{ achievementError }}</p>
+      <p
+        v-if="achievementError"
+        class="m-0 mb-16px text-14px text-[var(--danger-text)]"
+      >
+        {{ achievementError }}
+      </p>
 
-      <div v-if="achievements.length > 0" class="achievement-grid">
+      <div
+        v-if="achievements.length > 0"
+        class="grid gap-12px [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]"
+      >
         <div
           v-for="a in achievements"
           :key="a.id"
-          class="achievement-card"
-          :class="{ 'achievement-locked': !a.achieved }"
+          class="flex items-center gap-10px border border-[var(--border-soft)] rounded-12px bg-[var(--input-background-soft)] px-12px py-16px"
+          :class="{ 'opacity-55': !a.achieved }"
         >
           <img
             v-if="a.achieved ? a.iconUrl : (a.iconGrayUrl || a.iconUrl)"
+            class="h-48px w-48px flex flex-none items-center justify-center rounded-8px bg-[var(--image-well-background)] object-cover text-20px text-[var(--text-muted)]"
             :src="a.achieved ? a.iconUrl : (a.iconGrayUrl || a.iconUrl)"
             :alt="a.name || a.id"
             loading="lazy"
           />
-          <div v-else class="achievement-icon-placeholder">{{ a.achieved ? '✓' : '✗' }}</div>
-          <div class="achievement-info">
-            <strong>{{ a.name || a.id }}</strong>
-            <span v-if="a.description" class="achievement-desc">{{ a.description }}</span>
-            <span v-else-if="achievementSource === 'local'" class="achievement-desc">（本地数据，无名称）</span>
+          <div
+            v-else
+            class="h-48px w-48px flex flex-none items-center justify-center rounded-8px bg-[var(--image-well-background)] object-cover text-20px text-[var(--text-muted)]"
+          >
+            {{ a.achieved ? '✓' : '✗' }}
+          </div>
+          <div class="min-w-0 flex flex-1 flex-col justify-center gap-3px pl-15px">
+            <strong class="text-14px">{{ a.name || a.id }}</strong>
+            <span
+              v-if="a.description"
+              class="overflow-hidden text-ellipsis text-12px text-[var(--text-muted)] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]"
+            >
+              {{ a.description }}
+            </span>
+            <span
+              v-else-if="achievementSource === 'local'"
+              class="overflow-hidden text-ellipsis text-12px text-[var(--text-muted)] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]"
+            >
+              （本地数据，无名称）
+            </span>
           </div>
         </div>
       </div>
     </section>
   </div>
 </template>
-
-<style scoped>
-.game-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.detail-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.back-button {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  color: var(--text-soft);
-  background: transparent;
-  font-size: 14px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.back-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.back-arrow {
-  font-size: 18px;
-}
-.detail-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.detail-title h2 {
-  margin: 0;
-}
-.detail-appid {
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.detail-section h3 {
-  margin: 0 0 12px;
-}
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 18px;
-}
-.image-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  background: var(--panel-background);
-}
-.preview-frame {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 150px;
-  cursor: pointer;
-  background: var(--image-well-background);
-}
-.preview-frame img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-.select-checkbox {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: rgba(2, 6, 23, 0.7);
-  cursor: pointer;
-}
-.select-checkbox input {
-  width: 22px;
-  height: 22px;
-  cursor: pointer;
-}
-.selected-card {
-  outline: 2px solid var(--accent);
-}
-.image-meta {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-}
-.image-meta strong {
-  overflow: hidden;
-  color: var(--text-bright);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.meta-sub {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.achievement-bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.achievement-summary {
-  color: var(--text-muted);
-  font-size: 14px;
-}
-.achievement-error {
-  color: var(--danger-text);
-  font-size: 14px;
-  margin: 0 0 16px;
-}
-.open-dir-btn {
-  margin-left: auto;
-  font-size: 13px;
-  padding: 6px 14px;
-}
-.cache-msg {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.achievement-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-.achievement-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 12px;
-  background: var(--input-background-soft);
-}
-.achievement-card img,
-.achievement-icon-placeholder {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  object-fit: cover;
-  background: var(--image-well-background);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  color: var(--text-muted);
-}
-.achievement-locked {
-  opacity: 0.55;
-}
-.achievement-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  padding-left: 15px;
-  flex: 1;
-  justify-content: center;
-}
-.achievement-info strong {
-  font-size: 14px;
-}
-.achievement-desc {
-  color: var(--text-muted);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.state-card {
-  padding: 24px;
-  color: var(--text-muted);
-}
-</style>

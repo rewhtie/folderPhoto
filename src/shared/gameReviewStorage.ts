@@ -6,23 +6,33 @@ export interface GameReviewDraft {
   duration: string
   rating: number
   recommendation: string
+  coverBlurred: boolean
 }
 
 export interface StoredGameReview extends GameReviewDraft {
   appName: string
+  coverUrl?: string
+}
+
+export interface StoredCustomGame {
+  appId: string
+  appName: string
+  review: GameReviewDraft
 }
 
 type ReviewStorage = Pick<Storage, 'getItem' | 'setItem'>
 
 const STORAGE_KEY = 'steam-image-browser-game-review-drafts'
 const ORDER_STORAGE_KEY = 'steam-image-browser-game-review-order'
+const CUSTOM_GAMES_STORAGE_KEY = 'steam-image-browser-game-review-custom-games'
 const STORAGE_VERSION = 2
+const CUSTOM_GAMES_STORAGE_VERSION = 1
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function normalizeDraft(value: unknown): GameReviewDraft | null {
+export function normalizeGameReviewDraft(value: unknown): GameReviewDraft | null {
   if (!isRecord(value)) return null
 
   return {
@@ -39,6 +49,7 @@ function normalizeDraft(value: unknown): GameReviewDraft | null {
         ? value.rating
         : 0,
     recommendation: typeof value.recommendation === 'string' ? value.recommendation : '',
+    coverBlurred: value.coverBlurred === true,
   }
 }
 
@@ -48,12 +59,13 @@ function normalizeReviews(
 ): Record<string, StoredGameReview> {
   const reviews: Record<string, StoredGameReview> = {}
   for (const [appId, value] of Object.entries(values)) {
-    const draft = normalizeDraft(value)
+    const draft = normalizeGameReviewDraft(value)
     if (!appId || !draft || !isRecord(value)) continue
 
     const savedName = typeof value.appName === 'string' ? value.appName.trim() : ''
     const appName = savedName && savedName !== appId ? savedName : fallbackName ?? '未知游戏'
-    reviews[appId] = { appName, ...draft }
+    const coverUrl = typeof value.coverUrl === 'string' ? value.coverUrl : undefined
+    reviews[appId] = { appName, ...draft, ...(coverUrl ? { coverUrl } : {}) }
   }
   return reviews
 }
@@ -90,12 +102,13 @@ export function mergeGamesWithStoredReviews(
     return {
       ...game,
       appName: hasRealCurrentName ? game.appName : savedName || '未知游戏',
+      coverUrl: game.coverUrl || reviews[game.appId]?.coverUrl || '',
     }
   })
   const historicalGames = Object.entries(reviews).flatMap(([appId, review]) =>
     currentIds.has(appId)
       ? []
-      : [{ appId, appName: review.appName, coverUrl: '' }],
+      : [{ appId, appName: review.appName, coverUrl: review.coverUrl ?? '' }],
   )
   return [...currentGames, ...historicalGames]
 }
@@ -128,6 +141,53 @@ export function saveGameReviews(
       JSON.stringify({
         version: STORAGE_VERSION,
         reviews,
+      }),
+    )
+  } catch {
+    // localStorage may be unavailable or full; editing should continue in memory.
+  }
+}
+
+export function loadStoredCustomGames(storage: ReviewStorage): StoredCustomGame[] {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(CUSTOM_GAMES_STORAGE_KEY) ?? 'null')
+    if (
+      !isRecord(value) ||
+      value.version !== CUSTOM_GAMES_STORAGE_VERSION ||
+      !Array.isArray(value.games)
+    ) {
+      return []
+    }
+
+    const seen = new Set<string>()
+    return value.games.flatMap((item) => {
+      if (!isRecord(item)) return []
+      const appId = typeof item.appId === 'string' ? item.appId.trim() : ''
+      const appName = typeof item.appName === 'string' ? item.appName : ''
+      const review = normalizeGameReviewDraft(item.review)
+      if (!appId.startsWith('custom-') || seen.has(appId) || !review) return []
+      seen.add(appId)
+      return [{ appId, appName, review }]
+    })
+  } catch {
+    return []
+  }
+}
+
+export function saveStoredCustomGames(
+  storage: ReviewStorage,
+  games: StoredCustomGame[],
+): void {
+  try {
+    storage.setItem(
+      CUSTOM_GAMES_STORAGE_KEY,
+      JSON.stringify({
+        version: CUSTOM_GAMES_STORAGE_VERSION,
+        games: games.map((game) => ({
+          appId: game.appId,
+          appName: game.appName,
+          review: { ...game.review, type: [...game.review.type] },
+        })),
       }),
     )
   } catch {

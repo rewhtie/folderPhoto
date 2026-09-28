@@ -45,11 +45,14 @@
   --success-text: #86efac;
   --image-overlay-text: #e2e8f0;
   --image-overlay-accent: #7dd3fc;
+  --grade-c: #94a3b8;
   --grade-c-plus: #5eead4;
+  --grade-b: #60a5fa;
   --grade-b-plus: #22d3ee;
   --grade-a: #a78bfa;
   --grade-a-plus: #f472b6;
   --grade-s: #facc15;
+  --grade-s-plus-gradient: linear-gradient(90deg, #f87171, #facc15, #4ade80, #38bdf8, #a78bfa, #f472b6);
   --tier-top: #a5b4fc;
   --tier-elite: #fcd34d;
   --tier-npc: #fb923c;
@@ -106,11 +109,6 @@
   --success-text: #15803d;
   --image-overlay-text: #f8fafc;
   --image-overlay-accent: #7dd3fc;
-  --grade-c-plus: #0f766e;
-  --grade-b-plus: #0e7490;
-  --grade-a: #6d28d9;
-  --grade-a-plus: #be185d;
-  --grade-s: #a16207;
   --tier-top: #4338ca;
   --tier-elite: #854d0e;
   --tier-npc: #c2410c;

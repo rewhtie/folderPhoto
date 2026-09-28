@@ -46,7 +46,7 @@ function onCoverError(e: Event, game: OwnedGame): void {
     return
   }
   img.style.display = 'none'
-  img.parentElement?.classList.add('cover-failed')
+  img.nextElementSibling?.classList.replace('hidden', 'flex')
 }
 
 function coverWidth(tier: Tier): number {
@@ -210,73 +210,157 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="career-shell">
-    <section class="hero-panel">
-      <h1>职业游戏生涯拼图</h1>
-      <p class="description">按游戏时长分档展示你的 Steam 游戏库。玩得越多，封面越大。</p>
+  <main class="min-h-screen bg-[var(--page-background)] p-40px">
+    <section
+      class="mx-auto max-w-1180px border border-[var(--border)] rounded-24px bg-[var(--panel-background)] p-32px [box-shadow:var(--shadow-panel)]"
+    >
+      <h1 class="m-0 mb-12px text-32px">职业游戏生涯拼图</h1>
+      <p class="m-0 max-w-720px text-[var(--text-secondary)] [line-height:1.7]">
+        按游戏时长分档展示你的 Steam 游戏库。玩得越多，封面越大。
+      </p>
 
-      <div class="career-controls">
-        <div class="toggle-group">
-          <button :class="{ active: orientation === 'landscape' }" @click="orientation = 'landscape'">横版</button>
-          <button :class="{ active: orientation === 'portrait' }" @click="orientation = 'portrait'">竖版</button>
+      <div class="mt-24px flex items-center gap-12px">
+        <div
+          class="flex overflow-hidden border border-[var(--border-strong)] rounded-12px"
+        >
+          <button
+            class="cursor-pointer border-0 bg-transparent px-16px py-8px font-700 text-[var(--text-soft)]"
+            :class="{
+              '!bg-[var(--accent-background)] !text-[var(--accent)]':
+                orientation === 'landscape',
+            }"
+            @click="orientation = 'landscape'"
+          >
+            横版
+          </button>
+          <button
+            class="cursor-pointer border-0 bg-transparent px-16px py-8px font-700 text-[var(--text-soft)]"
+            :class="{
+              '!bg-[var(--accent-background)] !text-[var(--accent)]':
+                orientation === 'portrait',
+            }"
+            @click="orientation = 'portrait'"
+          >
+            竖版
+          </button>
         </div>
-        <button class="secondary-button" :disabled="loading" @click="load(true)">
+        <button
+          class="secondary-button cursor-pointer border border-[var(--accent-border)] rounded-12px bg-[var(--accent-background)] px-16px py-8px font-700 text-[var(--text-soft)] disabled:cursor-wait disabled:opacity-50"
+          :disabled="loading"
+          @click="load(true)"
+        >
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
-        <button class="secondary-button" :disabled="isExporting || playedCount === 0" @click="exportPng">
+        <button
+          class="secondary-button cursor-pointer border border-[var(--accent-border)] rounded-12px bg-[var(--accent-background)] px-16px py-8px font-700 text-[var(--text-soft)] disabled:cursor-wait disabled:opacity-50"
+          :disabled="isExporting || playedCount === 0"
+          @click="exportPng"
+        >
           {{ isExporting ? '导出中…' : '导出图片' }}
         </button>
-        <span class="stats" v-if="games.length > 0">{{ playedCount }} 个游戏 · {{ totalHours }}h<span v-if="familyCount > 0"> · {{ familyCount }} 个家庭共享</span></span>
+        <span
+          v-if="games.length > 0"
+          class="font-700 text-[var(--accent-soft)]"
+        >
+          {{ playedCount }} 个游戏 · {{ totalHours }}h<span v-if="familyCount > 0">
+            · {{ familyCount }} 个家庭共享</span
+          >
+        </span>
       </div>
     </section>
 
-    <section class="content-panel">
-      <div v-if="errorMessage" class="state-card error-state">
+    <section class="mx-auto mt-24px max-w-1180px">
+      <div
+        v-if="errorMessage"
+        class="border border-[var(--danger-border)] rounded-20px border-dashed bg-[var(--danger-background)] p-28px text-center text-[var(--danger-text)]"
+      >
         {{ errorMessage }}
         <button class="secondary-button" @click="load(true)">重试</button>
       </div>
-      <div v-else-if="loading" class="state-card">加载中…</div>
-      <div v-else-if="playedCount === 0" class="state-card">没有已游玩的游戏。</div>
+      <div
+        v-else-if="loading"
+        class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-soft)]"
+      >
+        加载中…
+      </div>
+      <div
+        v-else-if="playedCount === 0"
+        class="border border-[var(--border-strong)] rounded-20px border-dashed bg-[var(--panel-background-soft)] p-28px text-center text-[var(--text-soft)]"
+      >
+        没有已游玩的游戏。
+      </div>
       <template v-else>
-        <div v-for="tier in tierOrder" :key="tier" v-show="tiered[tier].length > 0" class="tier-block">
-          <h2 class="tier-label">{{ tierLabels[tier] }} · {{ tiered[tier].length }} 个</h2>
-          <div class="cover-row">
+        <div
+          v-for="tier in tierOrder"
+          v-show="tiered[tier].length > 0"
+          :key="tier"
+          class="mb-32px"
+        >
+          <h2 class="m-0 mb-14px text-18px text-[var(--accent)]">
+            {{ tierLabels[tier] }} · {{ tiered[tier].length }} 个
+          </h2>
+          <div class="flex flex-wrap gap-10px">
             <div
               v-for="game in tiered[tier]"
               :key="game.appid"
-              class="cover"
+              class="relative overflow-hidden rounded-8px bg-[var(--image-well-background)]"
               :style="{ width: coverWidth(tier) + 'px' }"
             >
               <img
+                class="block h-auto w-full"
                 :src="coverUrl(game.appid)"
                 :alt="game.name"
                 loading="lazy"
                 @error="(e) => onCoverError(e, game)"
               />
-              <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
-              <div class="cover-meta" :class="{ 'meta-mini': tier === 's' }">
-                <strong>{{ game.name || `#${game.appid}` }}</strong>
-                <span>{{ formatPlaytime(game.playtimeForever) }}</span>
+              <div
+                class="absolute inset-0 hidden items-center justify-center break-all p-4px text-center text-10px text-[var(--text-muted)]"
+              >
+                {{ game.name?.slice(0, 8) || `#${game.appid}` }}
+              </div>
+              <div
+                class="absolute inset-x-0 bottom-0 px-6px py-4px text-[var(--image-overlay-text)] [background:linear-gradient(transparent,rgba(0,0,0,0.85))]"
+                :class="{ '!px-4px !py-2px': tier === 's' }"
+              >
+                <strong
+                  class="block overflow-hidden text-ellipsis whitespace-nowrap text-11px"
+                  :class="{ '!text-9px': tier === 's' }"
+                >
+                  {{ game.name || `#${game.appid}` }}
+                </strong>
+                <span
+                  class="text-10px text-[var(--image-overlay-accent)]"
+                  :class="{ '!text-8px': tier === 's' }"
+                >
+                  {{ formatPlaytime(game.playtimeForever) }}
+                </span>
               </div>
             </div>
           </div>
         </div>
-        <div v-if="tiered.family.length > 0" class="tier-block">
-          <h2 class="tier-label tier-label-family">家庭共享 · {{ tiered.family.length }} 个 · 时长未知</h2>
-          <div class="cover-row">
+        <div v-if="tiered.family.length > 0" class="mb-32px">
+          <h2 class="m-0 mb-14px text-18px text-[var(--text-muted)]">
+            家庭共享 · {{ tiered.family.length }} 个 · 时长未知
+          </h2>
+          <div class="flex flex-wrap gap-10px">
             <div
               v-for="game in tiered.family"
               :key="game.appid"
-              class="cover cover-family"
+              class="relative overflow-hidden rounded-8px bg-[var(--image-well-background)] opacity-70"
               :style="{ width: coverWidth('s') + 'px' }"
             >
               <img
+                class="block h-auto w-full"
                 :src="coverUrl(game.appid)"
                 :alt="game.name"
                 loading="lazy"
                 @error="(e) => onCoverError(e, game)"
               />
-              <div class="cover-placeholder">{{ game.name?.slice(0, 8) || `#${game.appid}` }}</div>
+              <div
+                class="absolute inset-0 hidden items-center justify-center break-all p-4px text-center text-10px text-[var(--text-muted)]"
+              >
+                {{ game.name?.slice(0, 8) || `#${game.appid}` }}
+              </div>
             </div>
           </div>
         </div>
@@ -284,165 +368,3 @@ onMounted(() => {
     </section>
   </main>
 </template>
-
-<style scoped>
-.career-shell {
-  min-height: 100vh;
-  padding: 40px;
-  background:
-    var(--page-background);
-}
-.hero-panel,
-.content-panel {
-  max-width: 1180px;
-  margin: 0 auto;
-}
-.hero-panel {
-  padding: 32px;
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: var(--panel-background);
-  box-shadow: var(--shadow-panel);
-}
-h1 {
-  margin: 0 0 12px;
-  font-size: 32px;
-}
-.description {
-  max-width: 720px;
-  color: var(--text-secondary);
-  line-height: 1.7;
-  margin: 0;
-}
-.career-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 24px;
-}
-.toggle-group {
-  display: flex;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.toggle-group button {
-  padding: 8px 16px;
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  font-weight: 700;
-  cursor: pointer;
-}
-.toggle-group button.active {
-  background: var(--accent-background);
-  color: var(--accent);
-}
-.career-controls .secondary-button {
-  padding: 8px 16px;
-  border: 1px solid var(--accent-border);
-  border-radius: 12px;
-  background: var(--accent-background);
-  color: var(--text-soft);
-  font-weight: 700;
-  cursor: pointer;
-}
-.career-controls .secondary-button:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-.stats {
-  color: var(--accent-soft);
-  font-weight: 700;
-}
-.content-panel {
-  margin-top: 24px;
-}
-.state-card {
-  padding: 28px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 20px;
-  color: var(--text-soft);
-  background: var(--panel-background-soft);
-  text-align: center;
-}
-.error-state {
-  border-color: var(--danger-border);
-  color: var(--danger-text);
-  background: var(--danger-background);
-}
-.tier-block {
-  margin-bottom: 32px;
-}
-.tier-label {
-  margin: 0 0 14px;
-  font-size: 18px;
-  color: var(--accent);
-}
-.cover-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.cover {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--image-well-background);
-}
-.cover img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.cover-failed .cover-placeholder {
-  display: flex;
-}
-.cover-placeholder {
-  display: none;
-  position: absolute;
-  inset: 0;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  font-size: 10px;
-  color: var(--text-muted);
-  text-align: center;
-  word-break: break-all;
-}
-.cover-meta {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 4px 6px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
-  color: var(--image-overlay-text);
-}
-.cover-meta strong {
-  display: block;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cover-meta span {
-  font-size: 10px;
-  color: var(--image-overlay-accent);
-}
-.meta-mini strong {
-  font-size: 9px;
-}
-.meta-mini span {
-  font-size: 8px;
-}
-.meta-mini {
-  padding: 2px 4px;
-}
-.tier-label-family {
-  color: var(--text-muted);
-}
-.cover-family {
-  opacity: 0.7;
-}
-</style>
