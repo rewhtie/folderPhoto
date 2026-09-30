@@ -70,16 +70,21 @@ function buildDate(d) {
 
 function productName() {
   try {
-    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    return (pkg.build && pkg.build.productName) || 'SteamImageBrowser';
+    const config = JSON.parse(readFileSync(join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8'));
+    return config.productName || 'SteamImageBrowser';
   } catch {}
   return 'SteamImageBrowser';
 }
 
-// 列出产物目录下所有 .exe，排除 latest.yml/blockmap
+function tauriNsisDirectory() {
+  return join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
+}
+
+// 列出产物目录下所有 .exe
 function listExes(distDir) {
+  if (!existsSync(distDir)) return [];
   return readdirSync(distDir)
-    .filter((f) => /\.exe$/i.test(f))
+    .filter((f) => /\.exe$/i.test(f) && statSync(join(distDir, f)).isFile())
     .map((f) => join(distDir, f));
 }
 
@@ -114,15 +119,21 @@ async function findOrCreateRelease(token, owner, repo, tag, notes) {
       body: JSON.stringify({ tag_name: tag, name: tag, body: notes, draft: false, prerelease: false }),
     });
     if (!create.ok) {
-      console.error('创建 Release 失败：', create.status, await create.text());
-      process.exit(1);
+      const detail = await create.text();
+      if (create.status === 401) {
+        throw new Error('GitHub Token 无效或已过期。请删除 .release-token 后重新运行，并输入具有 repo 权限的新 Token。');
+      }
+      throw new Error(`创建 Release 失败：${create.status} ${detail}`);
     }
     const rel = await create.json();
     log(`已创建 Release ${tag}。`);
     return rel;
   }
-  console.error('查询 Release 失败：', getRel.status, await getRel.text());
-  process.exit(1);
+  const detail = await getRel.text();
+  if (getRel.status === 401) {
+    throw new Error('GitHub Token 无效或已过期。请删除 .release-token 后重新运行，并输入具有 repo 权限的新 Token。');
+  }
+  throw new Error(`查询 Release 失败：${getRel.status} ${detail}`);
 }
 
 // 上传文件列表到指定 Release。同名 asset 已存在则先删除再传。
@@ -176,6 +187,7 @@ module.exports = {
   parseRemote,
   buildDate,
   productName,
+  tauriNsisDirectory,
   listExes,
   findOrCreateRelease,
   uploadFiles,

@@ -5,59 +5,35 @@
   "description": "Steam 本地图片浏览器 — 浏览、收藏、拼图 Steam 游戏图片",
   "author": "linmingqi",
   "type": "module",
-  "main": "dist-electron/electron/main.js",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 54088 --strictPort",
-    "build:electron": "tsc -p tsconfig.node.json",
-    "dev:electron": "concurrently -k \"npm run dev\" \"npm run build:electron && wait-on tcp:54088 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:54088 electron .\"",
-    "build": "vue-tsc --noEmit && vite build && tsc -p tsconfig.node.json",
-    "dist": "npm run build && electron-builder",
+    "dev": "tauri dev",
+    "dev:web": "vite --host 127.0.0.1 --port 54088 --strictPort",
+    "build:web": "vue-tsc --noEmit && vite build",
+    "build": "tauri build --bundles nsis",
+    "dist": "npm run build",
     "release": "node scripts/release.cjs",
     "upload": "node scripts/upload.cjs",
     "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
-  },
-  "build": {
-    "appId": "com.steampc.imagebrowser",
-    "productName": "SteamImageBrowser",
-    "icon": "build/icon.svg",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**",
-      "dist-electron/**",
-      "package.json"
-    ],
-    "electronDist": "node_modules/electron/dist",
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "artifactName": "SteamImageBrowser-Setup_${env.BUILD_DATE}.exe"
-    }
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.0",
+    "@tauri-apps/plugin-dialog": "^2.8.0",
+    "@tauri-apps/plugin-fs": "^2.6.0",
     "html-to-image": "^1.11.13",
     "vue": "latest"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
     "@types/node": "latest",
     "@unocss/preset-uno": "^66.7.4",
     "@vitejs/plugin-vue": "latest",
     "@vue/tsconfig": "latest",
-    "concurrently": "latest",
-    "cross-env": "latest",
-    "electron": "latest",
-    "electron-builder": "latest",
     "typescript": "latest",
     "unocss": "^66.7.4",
     "vite": "latest",
     "vitest": "latest",
-    "vue-tsc": "latest",
-    "wait-on": "latest"
+    "vue-tsc": "latest"
   }
 }

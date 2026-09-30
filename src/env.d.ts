@@ -1,70 +1,11 @@
 /// <reference types="vite/client" />
 /// <reference types="unocss/preset-uno" />
 
-import type { ScanImagesResult, SelectDirectoryResult } from './shared/common/contracts/image-library'
-import type { Collections } from './shared/collections/model'
-import type { OwnedGamesResult } from './shared/common/contracts/owned-games'
-import type { TierList } from './shared/tier-list/model'
-
-interface ExportResult {
-  copied: number
-  skipped: number
-  failed: string[]
-}
-
-interface SteamCollection {
-  name: string
-  appIds: string[]
-}
-
-interface SteamSettings {
-  apiKey: string
-  steamId: string
-}
-
-interface Achievement {
-  id: string
-  name: string
-  description: string
-  iconUrl: string
-  iconGrayUrl: string
-  achieved: boolean
-  unlockTime: number | null
-}
-
-interface AchievementResult {
-  source: 'local' | 'api'
-  achievements: Achievement[]
-}
-
-interface CacheIconsResult {
-  cached: number
-  skipped: number
-  failed: number
-  directory: string
-}
+import type { DesktopApi } from './platform/desktop-api.js'
 
 declare global {
   interface Window {
-    imageLibrary: {
-      scanImages(directoryPath: string, options?: { includeDlc?: boolean }): Promise<ScanImagesResult>
-      loadSteamCollections(librarycacheDir: string): Promise<SteamCollection[]>
-      selectDirectory(): Promise<SelectDirectoryResult>
-      loadCollections(): Promise<Collections>
-      saveCollections(collections: Collections): Promise<void>
-      chooseExportDirectory(): Promise<string | null>
-      exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult>
-      saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
-      pickLocalImages(): Promise<string[] | null>
-      loadSettings(): Promise<SteamSettings>
-      saveSettings(settings: SteamSettings): Promise<void>
-      fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>
-      cacheAchievementIcons(appId: string, gameName: string, icons: Array<{ id: string; iconUrl: string; iconGrayUrl: string }>): Promise<CacheIconsResult>
-      openAchievementCacheDir(appId: string, gameName: string): Promise<void>
-      fetchOwnedGames(force?: boolean): Promise<OwnedGamesResult>
-      loadTierList(): Promise<TierList>
-      saveTierList(list: TierList): Promise<void>
-    }
+    imageLibrary: DesktopApi
   }
 }
 

@@ -1,7 +1,6 @@
 node_modules/
 dist/
 /achievements
-dist-electron/
 .vite/
 *.log
 .DS_Store
@@ -10,4 +9,6 @@ collections.json
 app-names.json
 owned-games.json
 release/
+src-tauri/target/
+src-tauri/gen/
 .release-token

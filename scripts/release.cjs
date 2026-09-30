@@ -1,29 +1,21 @@
 // 打包 + 询问是否上传到 GitHub Releases（打包日期作为 tag，不再用版本号）
 // 用法: npm run release
 // 只上传、不打包的独立指令见 scripts/upload.cjs（npm run upload）
-const { join } = require('path');
 const {
-  ROOT, buildDate, productName, run, ask, ensureToken, parseRemote,
+  ROOT, buildDate, productName, tauriNsisDirectory, run, ask, ensureToken, parseRemote,
   listExes, findOrCreateRelease, uploadFiles,
 } = require('./_shared.cjs');
 
 (async () => {
   const date = buildDate();
-  // 供 electron-builder 的 artifactName 宏 ${env.BUILD_DATE} 使用，文件名带日期
-  process.env.BUILD_DATE = date;
 
-  // 国内镜像：避免从 GitHub 下载 electron 二进制超时
-  process.env.ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/';
-  process.env.ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/';
+  console.log(`==> 步骤 1/3：打包 Tauri NSIS 安装包（日期标记 ${date}）\n`);
+  await run('npm', ['run', 'build'], { cwd: ROOT });
 
-  console.log(`==> 步骤 1/3：打包（日期标记 ${date}）\n`);
-  await run('npm', ['run', 'dist'], { cwd: ROOT });
-
-  const distDir = join(ROOT, 'release');
+  const distDir = tauriNsisDirectory();
   const exes = listExes(distDir);
   if (exes.length === 0) {
-    console.error('\n未在 release/ 找到 .exe 安装包，请检查打包是否成功。');
-    process.exit(1);
+    throw new Error('未在 Tauri NSIS 产物目录找到 .exe 安装包，请检查打包是否成功。');
   }
   console.log('\n打包产物：');
   exes.forEach((f) => console.log('  - ' + f));
@@ -37,8 +29,7 @@ const {
 
   const token = await ensureToken();
   if (!token) {
-    console.error('未提供 Token，退出。');
-    process.exit(1);
+    throw new Error('未提供 Token。');
   }
 
   const remote = parseRemote() || { owner: 'rewhtie', repo: 'folderPhoto' };
@@ -54,5 +45,5 @@ const {
   console.log(`\n完成！https://github.com/${remote.owner}/${remote.repo}/releases/tag/${tag}`);
 })().catch((e) => {
   console.error('\n出错：', e.message);
-  process.exit(1);
+  process.exitCode = 1;
 });

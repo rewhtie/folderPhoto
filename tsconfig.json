@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["vite/client", "vitest/globals", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "electron/**/*.test.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
 }

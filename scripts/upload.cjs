@@ -1,18 +1,16 @@
-// 仅上传 release/ 下已有的安装包到 GitHub Releases（不重新打包）
+// 仅上传已有的 Tauri NSIS 安装包到 GitHub Releases（不重新打包）
 // 用法: npm run upload
 // 打包+上传的完整流程见 scripts/release.cjs（npm run release）
-const { join, basename } = require('path');
 const {
-  ROOT, buildDate, productName, ask, ensureToken, parseRemote,
+  buildDate, productName, tauriNsisDirectory, ask, ensureToken, parseRemote,
   listExes, findOrCreateRelease, uploadFiles,
 } = require('./_shared.cjs');
 
 (async () => {
-  const distDir = join(ROOT, 'release');
+  const distDir = tauriNsisDirectory();
   const exes = listExes(distDir);
   if (exes.length === 0) {
-    console.error('release/ 下没有 .exe 安装包。请先运行 npm run release 打包，或手动放入安装包。');
-    process.exit(1);
+    throw new Error('Tauri NSIS 产物目录中没有 .exe 安装包。请先运行 npm run build。');
   }
 
   console.log('以下安装包将上传：');
@@ -26,8 +24,7 @@ const {
 
   const token = await ensureToken();
   if (!token) {
-    console.error('未提供 Token，退出。');
-    process.exit(1);
+    throw new Error('未提供 Token。');
   }
 
   const remote = parseRemote() || { owner: 'rewhtie', repo: 'folderPhoto' };
@@ -41,5 +38,5 @@ const {
   console.log(`\n完成！https://github.com/${remote.owner}/${remote.repo}/releases/tag/${tag}`);
 })().catch((e) => {
   console.error('\n出错：', e.message);
-  process.exit(1);
+  process.exitCode = 1;
 });

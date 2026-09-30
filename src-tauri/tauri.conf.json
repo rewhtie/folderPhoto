@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SteamImageBrowser",
+  "version": "0.1.0",
+  "identifier": "com.steampc.imagebrowser",
+  "build": {
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build:web",
+    "devUrl": "http://127.0.0.1:54088",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SteamImageBrowser",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' http://127.0.0.1:54088; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:54088 ws://127.0.0.1:54088 https://cdn.cloudflare.steamstatic.com; img-src 'self' asset: http://asset.localhost steam-image: http://steam-image.localhost https://steam-image.localhost https://cdn.cloudflare.steamstatic.com https://cdn.akamai.steamstatic.com https://steamcdn-a.akamaihd.net https://media.steampowered.com data: blob:; style-src 'self' 'unsafe-inline' http://127.0.0.1:54088; font-src 'self' data: http://127.0.0.1:54088"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  }
+}
