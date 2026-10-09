@@ -13,7 +13,12 @@ import {
   normalizeDuration,
   recommendationClass,
 } from '../shared/game-review/formatting'
-import { reorderIds, type DropPosition } from '../shared/game-review/order'
+import {
+  reorderIds,
+  sortGamesByReview,
+  type DropPosition,
+  type GameReviewSort,
+} from '../shared/game-review/order'
 import type {
   GameReviewDraft,
   GameReviewItem,
@@ -95,8 +100,10 @@ const recommendationMenu = ref<FloatingMenu | null>(null)
 const typeMenu = ref<FloatingMenu | null>(null)
 const recommendationOptions = ['', 'C', 'C+', 'B', 'B+', 'A', 'A+', 'S', 'S+']
 const selectedTypeFilters = ref<string[]>([])
+const excludedTypeFilters = ref<string[]>([])
 const selectedRecommendationFilters = ref<string[]>([])
 const gameNameQuery = ref('')
+const sortMode = ref<GameReviewSort>('manual')
 const pageSizeOptions = [5, 10, 20, 50, 100]
 const pageSize = ref(20)
 const currentPage = ref(1)
@@ -236,14 +243,42 @@ function toggleFilter(filters: string[], value: string): void {
   }
 }
 
+const allTypesSelected = computed(
+  () => GAME_TYPE_OPTIONS.length > 0 && GAME_TYPE_OPTIONS.every(
+    (type) => selectedTypeFilters.value.includes(type.id),
+  ),
+)
+const allTypesExcluded = computed(
+  () => GAME_TYPE_OPTIONS.length > 0 && GAME_TYPE_OPTIONS.every(
+    (type) => excludedTypeFilters.value.includes(type.id),
+  ),
+)
+
+function toggleAllTypeFilters(): void {
+  selectedTypeFilters.value = allTypesSelected.value
+    ? []
+    : GAME_TYPE_OPTIONS.map((type) => type.id)
+}
+
+function toggleAllExcludedTypes(): void {
+  excludedTypeFilters.value = allTypesExcluded.value
+    ? []
+    : GAME_TYPE_OPTIONS.map((type) => type.id)
+}
+
 function clearFilters(): void {
   selectedTypeFilters.value = []
+  excludedTypeFilters.value = []
   selectedRecommendationFilters.value = []
 }
 
 const hasActiveFilters = computed(
-  () => selectedTypeFilters.value.length > 0 || selectedRecommendationFilters.value.length > 0,
+  () =>
+    selectedTypeFilters.value.length > 0 ||
+    excludedTypeFilters.value.length > 0 ||
+    selectedRecommendationFilters.value.length > 0,
 )
+const isDragDisabled = computed(() => hasActiveFilters.value || sortMode.value !== 'manual')
 
 interface PendingDrag {
   appId: string
@@ -268,7 +303,7 @@ function resetDrag(): void {
 }
 
 function beginCoverDrag(appId: string, event: PointerEvent): void {
-  if (hasActiveFilters.value || event.button !== 0) return
+  if (isDragDisabled.value || event.button !== 0) return
 
   resetDrag()
   pendingDrag = {
@@ -366,21 +401,34 @@ onBeforeUnmount(resetDrag)
 const filteredGames = computed(() => {
   const normalizedQuery = gameNameQuery.value.trim().toLocaleLowerCase()
 
-  return allGames.value.filter((game) => {
+  const filtered = allGames.value.filter((game) => {
     const draft = drafts[game.appId]
     if (!draft) return false
 
     const matchesName =
       normalizedQuery.length === 0 || game.appName.toLocaleLowerCase().includes(normalizedQuery)
+    const hasSelectedType = selectedTypeFilters.value.some((type) => draft.type.includes(type))
+    const hasExcludedType = excludedTypeFilters.value.some((type) => draft.type.includes(type))
     const matchesType =
-      selectedTypeFilters.value.length === 0 ||
-      selectedTypeFilters.value.some((type) => draft.type.includes(type))
+      (selectedTypeFilters.value.length === 0 || hasSelectedType) &&
+      !hasExcludedType
     const matchesRecommendation =
       selectedRecommendationFilters.value.length === 0 ||
       selectedRecommendationFilters.value.includes(draft.recommendation)
 
     return matchesName && matchesType && matchesRecommendation
   })
+
+  return sortGamesByReview(
+    filtered,
+    sortMode.value,
+    (game) => ({
+      recommendation: drafts[game.appId].recommendation,
+      rating: drafts[game.appId].rating,
+      types: drafts[game.appId].type,
+    }),
+    selectedTypeFilters.value,
+  )
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredGames.value.length / pageSize.value)))
@@ -398,8 +446,10 @@ const visibleRangeEnd = computed(() =>
 watch(
   [
     () => selectedTypeFilters.value.join('\u0000'),
+    () => excludedTypeFilters.value.join('\u0000'),
     () => selectedRecommendationFilters.value.join('\u0000'),
     () => gameNameQuery.value,
+    () => sortMode.value,
   ],
   () => {
     currentPage.value = 1
@@ -940,13 +990,29 @@ onBeforeUnmount(() => {
             />
           </label>
 
+          <label class="sort-control min-w-0 flex items-center gap-10px">
+            <span class="flex-none text-13px font-900 text-[var(--text-soft)]">排序</span>
+            <select
+              v-model="sortMode"
+              class="min-w-160px border border-[var(--border-strong)] rounded-8px bg-[var(--input-background)] px-10px py-8px text-13px font-700 text-[var(--text-bright)] outline-none focus-visible:border-[var(--accent-border)]"
+              aria-label="游戏测评排序"
+            >
+              <option value="manual">默认顺序</option>
+              <option value="recommendation-desc">推荐度：高到低</option>
+              <option value="recommendation-asc">推荐度：低到高</option>
+              <option value="rating-desc">星级：高到低</option>
+              <option value="rating-asc">星级：低到高</option>
+              <option value="type-selection">类型：点击顺序</option>
+            </select>
+          </label>
+
           <div
             class="filter-group type-filter-group w-full min-w-0 flex items-start gap-12px"
             role="group"
             aria-labelledby="type-filter-heading"
           >
-            <span id="type-filter-heading" class="flex-none text-13px font-900 text-[var(--text-soft)]">
-              类型
+            <span id="type-filter-heading" class="min-h-30px py-8px flex-none text-13px font-900 text-[var(--text-soft)]">
+              类型筛选
             </span>
             <div class="filter-options min-w-0 flex flex-1 flex-wrap gap-6px">
               <button
@@ -960,6 +1026,48 @@ onBeforeUnmount(() => {
                 @click="toggleFilter(selectedTypeFilters, type.id)"
               >
                 {{ type.label }}
+              </button>
+              <button
+                class="filter-chip min-h-30px cursor-pointer border border-[var(--border-soft)] rounded-7px bg-transparent px-9px py-5px text-12px font-800 leading-none text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--border-strong)] hover:bg-[var(--accent-hover)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2"
+                :class="{ 'is-selected': allTypesSelected }"
+                type="button"
+                :aria-pressed="allTypesSelected"
+                @click="toggleAllTypeFilters"
+              >
+                {{ allTypesSelected ? '取消全选' : '全选' }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="filter-group type-exclude-group w-full min-w-0 flex items-start gap-12px"
+            role="group"
+            aria-labelledby="type-exclude-heading"
+          >
+            <span id="type-exclude-heading" class="min-h-30px py-8px flex-none text-13px font-900 text-[var(--text-soft)]">
+              类型过滤
+            </span>
+            <div class="filter-options min-w-0 flex flex-1 flex-wrap gap-6px">
+              <button
+                v-for="type in typeOptions"
+                :key="type.id"
+                class="filter-chip exclude-filter-chip min-h-30px cursor-pointer border border-[var(--border-soft)] rounded-7px bg-transparent px-9px py-5px text-12px font-800 leading-none text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--border-strong)] hover:bg-[var(--accent-hover)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2"
+                :class="{ 'is-selected': excludedTypeFilters.includes(type.id) }"
+                :style="typeStyle(type.id)"
+                type="button"
+                :aria-pressed="excludedTypeFilters.includes(type.id)"
+                @click="toggleFilter(excludedTypeFilters, type.id)"
+              >
+                {{ type.label }}
+              </button>
+              <button
+                class="filter-chip exclude-filter-chip min-h-30px cursor-pointer border border-[var(--border-soft)] rounded-7px bg-transparent px-9px py-5px text-12px font-800 leading-none text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--border-strong)] hover:bg-[var(--accent-hover)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--accent-hover)] focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2"
+                :class="{ 'is-selected': allTypesExcluded }"
+                type="button"
+                :aria-pressed="allTypesExcluded"
+                @click="toggleAllExcludedTypes"
+              >
+                {{ allTypesExcluded ? '取消全选' : '全选' }}
               </button>
             </div>
           </div>
@@ -1047,11 +1155,11 @@ onBeforeUnmount(() => {
                     <button
                       v-if="isCustomGame(game)"
                       class="custom-cover-button cover-drag-handle min-h-68px w-110px flex cursor-pointer items-center justify-center overflow-hidden border border-[var(--border-strong)] rounded-9px border-dashed bg-[var(--image-well-background)] p-0 text-12px font-800 text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--text-bright)] hover:text-[var(--text-bright)] focus-visible:border-[var(--text-bright)] focus-visible:text-[var(--text-bright)] focus-visible:outline-none"
-                      :class="{ 'drag-disabled': hasActiveFilters }"
+                      :class="{ 'drag-disabled': isDragDisabled }"
                       :data-export-ignore="game.coverUrl ? undefined : 'true'"
                       type="button"
                       :aria-label="game.coverUrl ? `更换${game.appName || '自定义游戏'}的封面` : '上传自定义游戏封面'"
-                      :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
+                      :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
                       @pointerdown="beginCoverDrag(game.appId, $event)"
                       @contextmenu.prevent
                       @dragstart.prevent
@@ -1070,8 +1178,8 @@ onBeforeUnmount(() => {
                     <div
                       v-else
                       class="cover-frame cover-drag-handle w-110px flex flex-none items-center justify-center overflow-hidden rounded-9px bg-[var(--image-well-background)]"
-                      :class="{ 'drag-disabled': hasActiveFilters }"
-                      :title="hasActiveFilters ? '筛选时不可排序' : '按住拖动以调整顺序'"
+                      :class="{ 'drag-disabled': isDragDisabled }"
+                      :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
                       @pointerdown="beginCoverDrag(game.appId, $event)"
                       @dragstart.prevent
                     >
@@ -1412,11 +1520,12 @@ onBeforeUnmount(() => {
 }
 
 .filter-bar {
-  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr) auto auto;
   grid-template-areas:
-    'search recommendation summary'
-    'divider divider divider'
-    'types types types';
+    'search recommendation sort summary'
+    'divider divider divider divider'
+    'types types types types'
+    'excluded-types excluded-types excluded-types excluded-types';
 }
 
 .game-name-search {
@@ -1427,14 +1536,29 @@ onBeforeUnmount(() => {
   grid-area: types;
 }
 
+.type-exclude-group {
+  grid-area: excluded-types;
+}
+
 .recommendation-filter-group {
   grid-area: recommendation;
+}
+
+.sort-control {
+  grid-area: sort;
 }
 
 .filter-chip.is-selected {
   border-color: currentColor;
   background: var(--accent-hover);
   box-shadow: inset 0 -2px currentColor;
+}
+
+.exclude-filter-chip.is-selected {
+  border-color: var(--danger-text);
+  color: var(--danger-text) !important;
+  background: color-mix(in srgb, var(--danger-text) 12%, transparent);
+  box-shadow: inset 0 -2px var(--danger-text);
 }
 
 .recommendation-filter-chip .recommendation-label {
@@ -1871,8 +1995,10 @@ onBeforeUnmount(() => {
     grid-template-areas:
       'search'
       'recommendation'
+      'sort'
       'divider'
       'types'
+      'excluded-types'
       'summary';
     align-items: start;
   }
