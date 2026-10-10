@@ -81,6 +81,45 @@ fn is_target_image(path: &Path) -> bool {
     IMAGE_EXTENSIONS.contains(&extension.as_str()) && SCAN_KEYWORDS.contains(&file_name.as_str())
 }
 
+fn image_asset(
+    root: &Path,
+    canonical_path: &Path,
+    metadata: &fs::Metadata,
+    app_info: &HashMap<String, AppInfoEntry>,
+    manifest_names: &HashMap<String, String>,
+) -> Result<ImageAsset, String> {
+    let relative = canonical_path
+        .strip_prefix(root)
+        .map_err(|_| "无法计算图片相对路径".to_string())?;
+    let app_id = app_id_from_relative_path(relative);
+    let app_name = app_info
+        .get(&app_id)
+        .map(|entry| entry.name.clone())
+        .filter(|name| !name.is_empty())
+        .or_else(|| manifest_names.get(&app_id).cloned())
+        .unwrap_or_default();
+    let name = canonical_path
+        .file_name()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let extension = canonical_path
+        .extension()
+        .map(|value| format!(".{}", value.to_string_lossy().to_ascii_lowercase()))
+        .unwrap_or_default();
+
+    Ok(ImageAsset {
+        name: name.clone(),
+        absolute_path: canonical_path.to_string_lossy().into_owned(),
+        file_url: String::new(),
+        extension,
+        size_bytes: metadata.len(),
+        relative_path: relative.to_string_lossy().into_owned(),
+        group_name: name,
+        app_id,
+        app_name,
+    })
+}
+
 fn collect_images(
     root: &Path,
     current: &Path,
@@ -141,32 +180,13 @@ fn collect_images(
             continue;
         }
 
-        let app_name = app_info
-            .get(&app_id)
-            .map(|entry| entry.name.clone())
-            .filter(|name| !name.is_empty())
-            .or_else(|| manifest_names.get(&app_id).cloned())
-            .unwrap_or_default();
-        let name = canonical_path
-            .file_name()
-            .map(|value| value.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let extension = canonical_path
-            .extension()
-            .map(|value| format!(".{}", value.to_string_lossy().to_ascii_lowercase()))
-            .unwrap_or_default();
-
-        images.push(ImageAsset {
-            name: name.clone(),
-            absolute_path: canonical_path.to_string_lossy().into_owned(),
-            file_url: String::new(),
-            extension,
-            size_bytes: metadata.len(),
-            relative_path: relative.to_string_lossy().into_owned(),
-            group_name: name,
-            app_id,
-            app_name,
-        });
+        images.push(image_asset(
+            root,
+            &canonical_path,
+            &metadata,
+            app_info,
+            manifest_names,
+        )?);
     }
     Ok(())
 }
@@ -206,6 +226,43 @@ pub async fn scan_images(
     )?;
     state.image_access().authorize_root(&root)?;
     state.remember_librarycache(&root)?;
+    images.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(ScanImagesResult { images })
+}
+
+#[tauri::command]
+pub async fn load_game_images(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<ScanImagesResult, String> {
+    let app_id = app_id.trim();
+    if app_id.is_empty() || !app_id.chars().all(|character| character.is_ascii_digit()) {
+        return Err("无效的 Steam AppID".to_string());
+    }
+
+    let root = state
+        .librarycache_path()?
+        .canonicalize()
+        .map_err(|_| "Steam 图片目录不存在，请先在图片浏览器中扫描".to_string())?;
+    let app_directory = root.join(app_id);
+    if !app_directory.is_dir() {
+        return Ok(ScanImagesResult { images: Vec::new() });
+    }
+
+    let app_info = load_app_info_entries(&root);
+    let manifest_names = load_app_names(&root);
+    let mut images = Vec::new();
+    let mut visited = HashSet::new();
+    collect_images(
+        &root,
+        &app_directory,
+        &mut visited,
+        &mut images,
+        &app_info,
+        &manifest_names,
+        true,
+    )?;
+    state.image_access().authorize_root(&root)?;
     images.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     Ok(ScanImagesResult { images })
 }

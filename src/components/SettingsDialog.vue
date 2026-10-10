@@ -83,7 +83,7 @@ async function save(): Promise<void> {
           关闭
         </button>
         <button
-          class="cursor-pointer border-0 rounded-14px bg-[var(--accent)] px-22px py-11px text-15px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
+          class="cursor-pointer border border-transparent rounded-12px bg-[var(--accent)] px-12px py-8px font-800 text-[var(--accent-text)] disabled:cursor-wait disabled:opacity-68"
           type="button"
           :disabled="saving"
           @click="save"

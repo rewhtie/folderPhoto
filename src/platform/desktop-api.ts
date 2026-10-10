@@ -53,6 +53,7 @@ export interface CacheIconsResult {
 
 export interface DesktopApi {
   scanImages(directoryPath: string, options?: ScanImagesOptions): Promise<ScanImagesResult>
+  loadGameImages(appId: string): Promise<ScanImagesResult>
   loadSteamCollections(librarycacheDir: string): Promise<SteamCollection[]>
   selectDirectory(): Promise<SelectDirectoryResult>
   loadCollections(): Promise<Collections>
@@ -61,6 +62,7 @@ export interface DesktopApi {
   exportImages(targetDirectory: string, absolutePaths: string[]): Promise<ExportResult>
   saveCollage(buffer: ArrayBuffer, suggestedName: string): Promise<string | null>
   pickLocalImages(options?: { multiple?: boolean }): Promise<string[] | null>
+  restoreLocalImageUrls(urls: string[]): Promise<Record<string, string>>
   loadSettings(): Promise<SteamSettings>
   saveSettings(settings: SteamSettings): Promise<void>
   fetchApiAchievements(appId: string): Promise<AchievementResult & { error?: string }>

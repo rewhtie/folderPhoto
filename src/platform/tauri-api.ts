@@ -18,6 +18,22 @@ function localImageUrl(path: string): string {
   return convertFileSrc(path, 'steam-image')
 }
 
+function localPathFromImageUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const isCustomProtocol = parsed.protocol === 'steam-image:'
+    const isProtocolHost =
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.hostname === 'steam-image.localhost'
+    if (!isCustomProtocol && !isProtocolHost) return null
+
+    const path = decodeURIComponent(parsed.pathname)
+    return /^\/[a-zA-Z]:[\\/]/.test(path) ? path.slice(1) : path
+  } catch {
+    return null
+  }
+}
+
 function selectedPaths(value: string | string[] | null): string[] {
   if (value === null) return []
   return Array.isArray(value) ? value : [value]
@@ -39,6 +55,11 @@ export function createTauriDesktopApi(): DesktopApi {
         directoryPath,
         options: options ?? {},
       })
+      return scanWithLocalUrls(result)
+    },
+
+    async loadGameImages(appId) {
+      const result = await invoke<ScanImagesResult>('load_game_images', { appId })
       return scanWithLocalUrls(result)
     },
 
@@ -94,6 +115,25 @@ export function createTauriDesktopApi(): DesktopApi {
       if (paths.length === 0) return null
       const authorized = await invoke<string[]>('authorize_local_images', { paths })
       return authorized.map(localImageUrl)
+    },
+
+    async restoreLocalImageUrls(urls) {
+      const restored: Record<string, string> = {}
+      await Promise.all(
+        [...new Set(urls)].map(async (url) => {
+          const path = localPathFromImageUrl(url)
+          if (!path) return
+          try {
+            const [authorized] = await invoke<string[]>('authorize_local_images', { paths: [path] })
+            if (authorized) {
+              restored[url] = `${localImageUrl(authorized)}?restored=${Date.now()}`
+            }
+          } catch {
+            // 文件已移动或删除时保留原记录，不影响其他封面恢复。
+          }
+        }),
+      )
+      return restored
     },
 
     loadSettings() {

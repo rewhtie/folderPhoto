@@ -42,6 +42,8 @@ import {
   saveStoredCustomGames,
 } from '../shared/game-review/storage'
 import { pickLocalImages } from '../shared/common/local-image-picker'
+import { rankGameReviews } from '../shared/game-review/ranking'
+import GameReviewSummary from './GameReviewSummary.vue'
 
 interface CustomReviewGame extends GameReviewItem {
   isCustom: true
@@ -82,6 +84,7 @@ const customGames = ref<CustomReviewGame[]>(
   })),
 )
 const hoveredRating = ref<{ appId: string; rating: number } | null>(null)
+const editingGameName = ref<{ appId: string; value: string } | null>(null)
 const recordFileInput = ref<HTMLInputElement | null>(null)
 const isImportingRecords = ref(false)
 const isExportingRecords = ref(false)
@@ -109,6 +112,7 @@ const pageSize = ref(20)
 const currentPage = ref(1)
 const gameOrder = ref<string[]>(loadGameReviewOrder(window.localStorage))
 const tableEl = ref<HTMLElement | null>(null)
+const isSummaryOpen = ref(false)
 const isExporting = ref(false)
 const exportError = ref('')
 const availableGames = computed<Array<GameReviewItem | CustomReviewGame>>(() => [
@@ -124,6 +128,22 @@ const allGames = computed<Array<GameReviewItem | CustomReviewGame>>(() => {
   const orderedIds = new Set(gameOrder.value)
   return [...orderedGames, ...availableGames.value.filter((game) => !orderedIds.has(game.appId))]
 })
+
+async function restoreStoredCoverUrls(): Promise<void> {
+  const urls = Object.values(savedReviews).flatMap((review) =>
+    review.coverUrl ? [review.coverUrl] : [],
+  )
+  if (urls.length === 0) return
+
+  const restored = await window.imageLibrary.restoreLocalImageUrls(urls)
+  for (const review of Object.values(savedReviews)) {
+    if (review.coverUrl && restored[review.coverUrl]) {
+      review.coverUrl = restored[review.coverUrl]
+    }
+  }
+}
+
+void restoreStoredCoverUrls()
 
 watch(
   availableGames,
@@ -226,12 +246,43 @@ function removeGame(game: GameReviewItem | CustomReviewGame): void {
 
   delete drafts[game.appId]
   delete reviewBadgeStyles[game.appId]
+  if (editingGameName.value?.appId === game.appId) editingGameName.value = null
   if (typeMenu.value?.appId === game.appId) typeMenu.value = null
   if (recommendationMenu.value?.appId === game.appId) recommendationMenu.value = null
 }
 
 function isCustomGame(game: GameReviewItem | CustomReviewGame): game is CustomReviewGame {
   return 'isCustom' in game && game.isCustom
+}
+
+function startGameNameEdit(game: GameReviewItem): void {
+  editingGameName.value = { appId: game.appId, value: game.appName }
+  void nextTick(() => {
+    document.querySelector<HTMLInputElement>(`[data-game-name-input="${game.appId}"]`)?.focus()
+  })
+}
+
+function cancelGameNameEdit(): void {
+  editingGameName.value = null
+}
+
+function saveGameNameEdit(game: GameReviewItem): void {
+  if (editingGameName.value?.appId !== game.appId) return
+  const appNameOverride = editingGameName.value.value.trim()
+  if (!appNameOverride) return
+
+  const draft = drafts[game.appId]
+  if (!draft) return
+  savedReviews[game.appId] = {
+    ...savedReviews[game.appId],
+    appName: savedReviews[game.appId]?.appName || game.appName || game.appId,
+    ...draft,
+    type: [...draft.type],
+    appNameOverride,
+    coverUrl: game.coverUrl,
+  }
+  editingGameName.value = null
+  persistGameReviews()
 }
 
 function toggleFilter(filters: string[], value: string): void {
@@ -398,10 +449,10 @@ function handleCustomCoverClick(appId: string): void {
 
 onBeforeUnmount(resetDrag)
 
-const filteredGames = computed(() => {
+const matchingGames = computed(() => {
   const normalizedQuery = gameNameQuery.value.trim().toLocaleLowerCase()
 
-  const filtered = allGames.value.filter((game) => {
+  return allGames.value.filter((game) => {
     const draft = drafts[game.appId]
     if (!draft) return false
 
@@ -418,9 +469,11 @@ const filteredGames = computed(() => {
 
     return matchesName && matchesType && matchesRecommendation
   })
+})
 
-  return sortGamesByReview(
-    filtered,
+const filteredGames = computed(() =>
+  sortGamesByReview(
+    matchingGames.value,
     sortMode.value,
     (game) => ({
       recommendation: drafts[game.appId].recommendation,
@@ -428,8 +481,10 @@ const filteredGames = computed(() => {
       types: drafts[game.appId].type,
     }),
     selectedTypeFilters.value,
-  )
-})
+  ),
+)
+
+const topGameReviews = computed(() => rankGameReviews(matchingGames.value, drafts, 20))
 
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredGames.value.length / pageSize.value)))
 const pageStartIndex = computed(() => (currentPage.value - 1) * pageSize.value)
@@ -723,8 +778,12 @@ function snapshotGameReviews(): void {
       continue
     }
 
+    const existingReview = savedReviews[game.appId]
     savedReviews[game.appId] = {
-      appName: game.appName || game.appId,
+      appName: existingReview?.appName || game.appName || game.appId,
+      ...(existingReview?.appNameOverride
+        ? { appNameOverride: existingReview.appNameOverride }
+        : {}),
       coverUrl: game.coverUrl,
       ...draft,
       type: [...draft.type],
@@ -926,6 +985,14 @@ onBeforeUnmount(() => {
           @click="exportReviewRecords"
         >
           {{ isExportingRecords ? '导出中…' : '导出记录' }}
+        </button>
+        <button
+          class="cursor-pointer border border-[var(--border-strong)] rounded-10px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] disabled:cursor-not-allowed disabled:opacity-55"
+          type="button"
+          :disabled="topGameReviews.length === 0"
+          @click="isSummaryOpen = true"
+        >
+          查看总结
         </button>
         <button
           class="cursor-pointer border border-[var(--border-strong)] rounded-10px bg-[var(--accent-hover)] px-16px py-9px text-14px font-800 text-[var(--text-bright)] disabled:cursor-wait disabled:opacity-55"
@@ -1151,94 +1218,123 @@ onBeforeUnmount(() => {
                 }"
               >
                 <td class="cover-cell !p-12px">
-                  <div class="cover-wrapper relative w-110px inline-flex items-center justify-center">
-                    <button
-                      v-if="isCustomGame(game)"
-                      class="custom-cover-button cover-drag-handle min-h-68px w-110px flex cursor-pointer items-center justify-center overflow-hidden border border-[var(--border-strong)] rounded-9px border-dashed bg-[var(--image-well-background)] p-0 text-12px font-800 text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--text-bright)] hover:text-[var(--text-bright)] focus-visible:border-[var(--text-bright)] focus-visible:text-[var(--text-bright)] focus-visible:outline-none"
-                      :class="{ 'drag-disabled': isDragDisabled }"
-                      :data-export-ignore="game.coverUrl ? undefined : 'true'"
-                      type="button"
-                      :aria-label="game.coverUrl ? `更换${game.appName || '自定义游戏'}的封面` : '上传自定义游戏封面'"
-                      :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
-                      @pointerdown="beginCoverDrag(game.appId, $event)"
-                      @contextmenu.prevent
-                      @dragstart.prevent
-                      @click="handleCustomCoverClick(game.appId)"
-                    >
-                      <img
+                    <div class="cover-wrapper relative w-110px inline-flex items-center justify-center">
+                      <button
+                        v-if="isCustomGame(game)"
+                        class="custom-cover-button cover-drag-handle min-h-68px w-110px flex cursor-pointer items-center justify-center overflow-hidden border border-[var(--border-strong)] rounded-9px border-dashed bg-[var(--image-well-background)] p-0 text-12px font-800 text-[var(--text-muted)] [font-family:inherit] hover:border-[var(--text-bright)] hover:text-[var(--text-bright)] focus-visible:border-[var(--text-bright)] focus-visible:text-[var(--text-bright)] focus-visible:outline-none"
+                        :class="{ 'drag-disabled': isDragDisabled }"
+                        :data-export-ignore="game.coverUrl ? undefined : 'true'"
+                        type="button"
+                        :aria-label="game.coverUrl ? `更换${game.appName || '自定义游戏'}的封面` : '上传自定义游戏封面'"
+                        :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
+                        @pointerdown="beginCoverDrag(game.appId, $event)"
+                        @contextmenu.prevent
+                        @dragstart.prevent
+                        @click="handleCustomCoverClick(game.appId)"
+                      >
+                        <img
+                          v-if="game.coverUrl"
+                          class="cover-image block h-auto w-full"
+                          :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
+                          :src="game.coverUrl"
+                          :alt="game.appName || '自定义游戏封面'"
+                          draggable="false"
+                        />
+                        <span v-else>上传封面</span>
+                      </button>
+                      <div
+                        v-else
+                        class="cover-frame cover-drag-handle w-110px flex flex-none items-center justify-center overflow-hidden rounded-9px bg-[var(--image-well-background)]"
+                        :class="{ 'drag-disabled': isDragDisabled }"
+                        :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
+                        @pointerdown="beginCoverDrag(game.appId, $event)"
+                        @dragstart.prevent
+                      >
+                        <img
+                          class="cover-image block h-auto w-full"
+                          :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
+                          :src="game.coverUrl"
+                          :alt="game.appName"
+                          draggable="false"
+                        />
+                      </div>
+                      <button
                         v-if="game.coverUrl"
-                        class="cover-image block h-auto w-full"
-                        :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
-                        :src="game.coverUrl"
-                        :alt="game.appName || '自定义游戏封面'"
-                        draggable="false"
-                      />
-                      <span v-else>上传封面</span>
-                    </button>
-                    <div
-                      v-else
-                      class="cover-frame cover-drag-handle w-110px flex flex-none items-center justify-center overflow-hidden rounded-9px bg-[var(--image-well-background)]"
-                      :class="{ 'drag-disabled': isDragDisabled }"
-                      :title="isDragDisabled ? '筛选或排序时不可手动调整顺序' : '按住拖动以调整顺序'"
-                      @pointerdown="beginCoverDrag(game.appId, $event)"
-                      @dragstart.prevent
-                    >
-                      <img
-                        class="cover-image block h-auto w-full"
-                        :class="{ 'is-blurred': drafts[game.appId].coverBlurred }"
-                        :src="game.coverUrl"
-                        :alt="game.appName"
-                        draggable="false"
-                      />
+                        class="cover-blur-toggle absolute right-6px top-6px z-2 cursor-pointer border border-[rgba(255,255,255,0.38)] rounded-6px bg-[rgba(15,23,42,0.78)] px-7px py-4px text-11px font-800 leading-none text-white opacity-0 [font-family:inherit] transition-[opacity,background] duration-150"
+                        data-export-ignore="true"
+                        type="button"
+                        :aria-label="`${drafts[game.appId].coverBlurred ? '关闭' : '开启'}${game.appName || '自定义游戏'}的封面模糊`"
+                        :aria-pressed="drafts[game.appId].coverBlurred"
+                        @pointerdown.stop
+                        @click.stop="drafts[game.appId].coverBlurred = !drafts[game.appId].coverBlurred"
+                      >
+                        {{ drafts[game.appId].coverBlurred ? '清晰' : '模糊' }}
+                      </button>
                     </div>
-                    <button
-                      v-if="game.coverUrl"
-                      class="cover-blur-toggle absolute right-6px top-6px z-2 cursor-pointer border border-[rgba(255,255,255,0.38)] rounded-6px bg-[rgba(15,23,42,0.78)] px-7px py-4px text-11px font-800 leading-none text-white opacity-0 [font-family:inherit] transition-[opacity,background] duration-150"
-                      data-export-ignore="true"
-                      type="button"
-                      :aria-label="`${drafts[game.appId].coverBlurred ? '关闭' : '开启'}${game.appName || '自定义游戏'}的封面模糊`"
-                      :aria-pressed="drafts[game.appId].coverBlurred"
-                      @pointerdown.stop
-                      @click.stop="drafts[game.appId].coverBlurred = !drafts[game.appId].coverBlurred"
-                    >
-                      {{ drafts[game.appId].coverBlurred ? '清晰' : '模糊' }}
-                    </button>
-                  </div>
-                </td>
-                <td>
-                  <div class="game-name-cell relative min-h-112px flex items-center justify-center">
-                    <div
-                      v-if="isCustomGame(game)"
-                      class="w-full grid items-center gap-2px [grid-template-columns:auto_minmax(0,1fr)_auto]"
-                    >
-                      <span class="font-800 text-[var(--text-bright)]">《</span>
-                      <input
-                        v-model="game.appName"
-                        class="custom-name-input w-full min-w-0 border-0 bg-transparent px-2px py-8px text-center text-15px font-800 text-[var(--text-bright)] outline-none [font:inherit] placeholder:font-500 placeholder:text-[var(--text-faint)] focus:bg-[var(--accent-hover)]"
-                        type="text"
-                        aria-label="自定义游戏名"
-                        placeholder="输入游戏名"
-                      />
-                      <span class="font-800 text-[var(--text-bright)]">》</span>
+                  </td>
+                  <td>
+                    <div class="game-name-cell relative min-h-112px flex items-center justify-center">
+                      <div
+                        v-if="isCustomGame(game)"
+                        class="w-full grid items-center gap-2px [grid-template-columns:auto_minmax(0,1fr)_auto]"
+                      >
+                        <span class="font-800 text-[var(--text-bright)]">《</span>
+                        <input
+                          v-model="game.appName"
+                          class="custom-name-input w-full min-w-0 border-0 bg-transparent px-2px py-8px text-center text-15px font-800 text-[var(--text-bright)] outline-none [font:inherit] placeholder:font-500 placeholder:text-[var(--text-faint)] focus:bg-[var(--accent-hover)]"
+                          type="text"
+                          aria-label="自定义游戏名"
+                          placeholder="输入游戏名"
+                        />
+                        <span class="font-800 text-[var(--text-bright)]">》</span>
+                      </div>
+                      <div
+                        v-else-if="editingGameName?.appId === game.appId"
+                        class="w-full grid items-center gap-2px [grid-template-columns:auto_minmax(0,1fr)_auto]"
+                      >
+                        <span class="font-800 text-[var(--text-bright)]">《</span>
+                        <input
+                          v-model="editingGameName.value"
+                          class="game-name-edit-input w-full min-w-0 border border-[var(--accent-border)] rounded-6px bg-[var(--input-background)] px-7px py-6px text-center text-15px font-800 text-[var(--text-bright)] outline-none [font:inherit] focus:shadow-[0_0_0_3px_var(--focus-ring)]"
+                          type="text"
+                          :data-game-name-input="game.appId"
+                          :aria-label="`编辑${game.appName}的游戏名`"
+                          @keydown.enter.prevent="saveGameNameEdit(game)"
+                          @keydown.esc.prevent="cancelGameNameEdit"
+                        />
+                        <span class="font-800 text-[var(--text-bright)]">》</span>
+                      </div>
+                      <strong
+                        v-else
+                        class="block text-15px font-800 text-[var(--text-bright)] [overflow-wrap:anywhere]"
+                        :title="game.appName"
+                      >
+                        《{{ game.appName }}》
+                      </strong>
+                      <div class="game-name-actions" data-export-ignore="true">
+                        <template v-if="!isCustomGame(game) && editingGameName?.appId === game.appId">
+                          <button type="button" @click="saveGameNameEdit(game)">保存</button>
+                          <button type="button" @click="cancelGameNameEdit">取消</button>
+                        </template>
+                        <button
+                          v-else-if="!isCustomGame(game)"
+                          type="button"
+                          :aria-label="`编辑${game.appName}`"
+                          @click="startGameNameEdit(game)"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          class="delete-action"
+                          type="button"
+                          :aria-label="`删除${game.appName || '自定义游戏'}`"
+                          @click="removeGame(game)"
+                        >
+                          删除
+                        </button>
+                      </div>
                     </div>
-                    <strong
-                      v-else
-                      class="block text-15px font-800 text-[var(--text-bright)] [overflow-wrap:anywhere]"
-                      :title="game.appName"
-                    >
-                      《{{ game.appName }}》
-                    </strong>
-                    <button
-                      class="delete-game-button"
-                      data-export-ignore="true"
-                      type="button"
-                      :aria-label="`删除${game.appName || '自定义游戏'}`"
-                      @click="removeGame(game)"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </td>
+                  </td>
                 <td>
                   <button
                     class="type-control min-h-112px w-full flex cursor-pointer items-center justify-center border-0 bg-transparent p-12px text-inherit outline-none hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
@@ -1449,6 +1545,13 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <GameReviewSummary
+      v-if="isSummaryOpen"
+      :games="topGameReviews"
+      :total-reviewed="matchingGames.length"
+      @close="isSummaryOpen = false"
+    />
+
     <Teleport to="body">
       <div
         v-if="typeMenu || recommendationMenu"
@@ -1608,7 +1711,7 @@ onBeforeUnmount(() => {
 
 .review-table th,
 .review-table td {
-  padding: 16px;
+  padding: 10px;
   border-right: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
   text-align: center;
@@ -1739,18 +1842,13 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-.delete-game-button {
+.game-name-actions {
   position: absolute;
   bottom: 4px;
   left: 50%;
-  padding: 4px 8px;
-  border: 0;
-  color: #f87171;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 4px);
@@ -1759,20 +1857,39 @@ onBeforeUnmount(() => {
     transform 140ms ease;
 }
 
-.game-name-cell:hover .delete-game-button,
-.game-name-cell:focus-within .delete-game-button,
-.delete-game-button:focus-visible {
+.game-name-actions button {
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  color: var(--accent-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.game-name-actions .delete-action {
+  color: #f87171;
+}
+
+.game-name-cell:hover .game-name-actions,
+.game-name-cell:focus-within .game-name-actions {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, 0);
 }
 
-.delete-game-button:hover,
-.delete-game-button:focus-visible {
-  color: #fecaca;
+.game-name-actions button:hover,
+.game-name-actions button:focus-visible {
+  color: var(--text-bright);
   text-decoration: underline;
   text-underline-offset: 3px;
   outline: none;
+}
+
+.game-name-actions .delete-action:hover,
+.game-name-actions .delete-action:focus-visible {
+  color: #fecaca;
 }
 
 .type-option:hover,

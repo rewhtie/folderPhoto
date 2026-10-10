@@ -15,6 +15,7 @@ export interface GameReviewDraft {
 
 export interface StoredGameReview extends GameReviewDraft {
   appName: string
+  appNameOverride?: string
   coverUrl?: string
 }
 

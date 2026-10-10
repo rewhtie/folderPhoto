@@ -9,7 +9,7 @@ export interface GameTypeOption extends GameTypeDefinition {
 }
 
 export const GAME_TYPES: Readonly<Record<string, GameTypeDefinition>> = {
-  butter: { label: '🧈', color: '#ffcfdf' },
+  butter: { label: '🌿', color: '#ffcfdf' },
   galgame: { label: 'Galgame', color: '#f472b6' },
   horror: { label: '恐怖游戏', color: '#dc2626' },
   rpg: { label: 'RPG', color: '#8b5cf6' },

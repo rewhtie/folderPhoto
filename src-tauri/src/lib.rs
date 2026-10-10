@@ -22,6 +22,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::image_library::scan_images,
+            commands::image_library::load_game_images,
             commands::image_library::authorize_local_images,
             commands::collections::load_collections,
             commands::collections::save_collections,

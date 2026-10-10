@@ -52,7 +52,14 @@ function parseReviews(value: unknown): Record<string, StoredGameReview> {
       const draft = normalizeGameReviewDraft(item)
       if (!draft) throw new GameReviewBackupError('测评记录包含无效字段')
       const appName = typeof item.appName === 'string' ? item.appName.trim() : ''
-      return [appId, { appName: appName || '未知游戏', ...draft }]
+      const appNameOverride = typeof item.appNameOverride === 'string'
+        ? item.appNameOverride.trim()
+        : ''
+      return [appId, {
+        appName: appName || '未知游戏',
+        ...draft,
+        ...(appNameOverride ? { appNameOverride } : {}),
+      }]
     }),
   )
 }
@@ -138,9 +145,12 @@ export function mergeGameReviewImport(
     ]),
   )
   for (const [appId, review] of Object.entries(imported.reviews)) {
+    const localReview = reviews[appId]
+    const appNameOverride = review.appNameOverride || localReview?.appNameOverride
     reviews[appId] = {
       appName: review.appName,
-      ...mergeDraft(reviews[appId], review),
+      ...mergeDraft(localReview, review),
+      ...(appNameOverride ? { appNameOverride } : {}),
     }
   }
 

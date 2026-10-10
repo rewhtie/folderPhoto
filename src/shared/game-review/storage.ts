@@ -50,7 +50,15 @@ function normalizeReviews(
     const savedName = typeof value.appName === 'string' ? value.appName.trim() : ''
     const appName = savedName && savedName !== appId ? savedName : fallbackName ?? '未知游戏'
     const coverUrl = typeof value.coverUrl === 'string' ? value.coverUrl : undefined
-    reviews[appId] = { appName, ...draft, ...(coverUrl ? { coverUrl } : {}) }
+    const appNameOverride = typeof value.appNameOverride === 'string'
+      ? value.appNameOverride.trim()
+      : ''
+    reviews[appId] = {
+      appName,
+      ...draft,
+      ...(appNameOverride ? { appNameOverride } : {}),
+      ...(coverUrl ? { coverUrl } : {}),
+    }
   }
   return reviews
 }
@@ -86,14 +94,16 @@ export function mergeGamesWithStoredReviews(
 
     return {
       ...game,
-      appName: hasRealCurrentName ? game.appName : savedName || '未知游戏',
+      appName: reviews[game.appId]?.appNameOverride || (
+        hasRealCurrentName ? game.appName : savedName || '未知游戏'
+      ),
       coverUrl: game.coverUrl || reviews[game.appId]?.coverUrl || '',
     }
   })
   const historicalGames = Object.entries(reviews).flatMap(([appId, review]) =>
     currentIds.has(appId)
       ? []
-      : [{ appId, appName: review.appName, coverUrl: review.coverUrl ?? '' }],
+      : [{ appId, appName: review.appNameOverride || review.appName, coverUrl: review.coverUrl ?? '' }],
   )
   return [...currentGames, ...historicalGames]
 }
